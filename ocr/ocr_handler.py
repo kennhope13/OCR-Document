@@ -78,14 +78,18 @@ def _process_pdf_file(file_path, file_name):
         raise RuntimeError("python-docx is not installed. Please install project dependencies.")
 
     images = convert_from_path(file_path)
-    ocr_result = None
+    page_results = []
     for page_idx, image in enumerate(images):
         image_np = np.array(image)
-        ocr_result = get_ocr_model().ocr(image_np, cls=True)
-        if not ocr_result or not ocr_result[0]:
-            return None
-        create_docx(ocr_result, f"{Path(file_name).stem}_page_{page_idx + 1}.docx")
-    return ocr_result
+        page_result = get_ocr_model().ocr(image_np, cls=True)
+        if not page_result or not page_result[0]:
+            continue
+        page_results.append(page_result)
+        create_docx(page_result, f"{Path(file_name).stem}_page_{page_idx + 1}.docx")
+
+    if not page_results:
+        return None
+    return page_results[0] if len(page_results) == 1 else page_results
 
 
 # Xử lý ảnh

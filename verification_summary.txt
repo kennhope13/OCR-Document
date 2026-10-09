@@ -1,0 +1,23 @@
+OCR_SUMMARY
+Expected text: CodeZX Software Company Limited Ma tai lieu: OCR-001 Ngay: 09/10/2026
+OCR text: CodeZX Software Company Limited Ma tai lieu: OCR-001 Ngay: 09/10/2026
+DOCX text: CodeZX Software Company Limited Ma tai lieu: OCR-001 Ngay: 09/10/2026
+CER OCR: 0.0000
+CER DOCX: 0.0000
+
+FULL_SUMMARY
+FOUND: 16 passed
+HAS_PASSED
+HAS_PASSED
+
+GIT_STATUS
+M app.py
+?? pytest.ini
+?? pytest_full.log
+?? scripts/
+?? test_ocr_real.log
+?? tests/fixtures/
+?? tests/test_app_emulator_integration.py
+?? tests/test_ocr_real_pipeline.py
+DIFF_CHECK
+NO_DIFF_CHECK_OUTPUT

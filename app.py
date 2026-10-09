@@ -3,6 +3,7 @@ import os
 import traceback
 
 from flask import Flask, after_this_request, jsonify, request, send_file
+from google.auth.credentials import AnonymousCredentials
 from google.cloud import storage
 from PIL import Image
 import numpy as np
@@ -12,6 +13,26 @@ from ocr.ocr_handler import detect_file_kind, is_supported_file, process_image, 
 from preprocessing_image.preprocessing_image import deskew
 
 app = Flask(__name__)
+
+
+def get_storage_client():
+    project_id = os.getenv('GCS_PROJECT_ID', 'test-project')
+    if os.getenv('STORAGE_EMULATOR_HOST'):
+        return storage.Client(project=project_id, credentials=AnonymousCredentials())
+    return storage.Client(project=project_id)
+
+
+def get_bucket_name():
+    return os.getenv('GCS_BUCKET_NAME', 'ocr_project_file_storage')
+
+
+def ensure_bucket_exists(bucket):
+    try:
+        if not bucket.exists():
+            bucket.create()
+    except Exception:
+        if not bucket.exists():
+            raise
 
 
 @app.route('/convert', methods=['POST'])
@@ -54,9 +75,11 @@ def convert_ocr():
 
         docx_file = create_docx(ocr_result, file_name)
 
-        client = storage.Client()
-        bucket_name = os.getenv("GCS_BUCKET_NAME", "ocr_project_file_storage")
+        client = get_storage_client()
+        bucket_name = get_bucket_name()
         bucket = client.bucket(bucket_name)
+        if os.getenv("STORAGE_EMULATOR_HOST"):
+            ensure_bucket_exists(bucket)
         blob_path_output = f"output/image_to_word/{os.path.basename(docx_file)}"
         blob = bucket.blob(blob_path_output)
         blob.upload_from_filename(docx_file)
@@ -82,8 +105,8 @@ def download_file(filename):
         return send_file(local_path, as_attachment=True)
 
     try:
-        client = storage.Client()
-        bucket_name = os.getenv("GCS_BUCKET_NAME", "ocr_project_file_storage")
+        client = get_storage_client()
+        bucket_name = get_bucket_name()
         bucket = client.bucket(bucket_name)
         blob_path = f"output/image_to_word/{filename}"
         blob = bucket.blob(blob_path)
