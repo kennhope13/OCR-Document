@@ -1,0 +1,144 @@
+{
+  "document": "DS-K1107AM.pdf",
+  "cases": [
+    {
+      "id": "GT-P2-001",
+      "page": 2,
+      "field": "description",
+      "model": "iDS-7332HUHI-M4/S",
+      "source_image": "page2.png",
+      "expected_value": "including mouse, cables and adapter",
+      "actual_ocr": "including mouse, cables and adapier",
+      "status": "CONFIRMED",
+      "notes": "OCR nhận dạng sai từ adapter."
+    },
+    {
+      "id": "GT-P2-002",
+      "page": 2,
+      "field": "description",
+      "model": "DS-2DE7A232IW-AEB",
+      "source_image": "page2.png",
+      "expected_value": "with adapter",
+      "actual_ocr": "with adapler",
+      "status": "CONFIRMED",
+      "notes": "OCR nhận dạng sai chính tả từ adapter."
+    },
+    {
+      "id": "GT-P2-003",
+      "page": 2,
+      "field": "model",
+      "model": "DS-2CE76D0T-EXLPF",
+      "source_image": "page2.png",
+      "expected_value": "DS-2CE76D0T-EXLPF",
+      "actual_ocr": "DS-2CE76D0T-EXLPE",
+      "status": "CONFIRMED",
+      "notes": "OCR nhầm chữ F thành E ở hậu tố model."
+    },
+    {
+      "id": "GT-P3-001",
+      "page": 3,
+      "field": "quantity",
+      "model": "DS-K7P03",
+      "source_image": "page3.png",
+      "expected_value": "60 PCS",
+      "actual_ocr": "50PCS",
+      "status": "CONFIRMED",
+      "notes": "OCR nhận dạng sai số lượng."
+    },
+    {
+      "id": "GT-P3-002",
+      "page": 3,
+      "field": "model",
+      "model": "DS-KV6113-WPE1(C)",
+      "source_image": "page3.png",
+      "expected_value": "DS-KV6113-WPE1(C)",
+      "actual_ocr": "DS-KV6113-WPE1C)",
+      "status": "CONFIRMED",
+      "notes": "OCR thiếu dấu ngoặc mở sau WPE1."
+    },
+    {
+      "id": "GT-P3-003",
+      "page": 3,
+      "field": "description",
+      "model": "DS-PHA64-LP(B)",
+      "source_image": "page3.png",
+      "expected_value": "DS-PHA64-LP(B)",
+      "actual_ocr": "DS-PHA64-LPB",
+      "status": "CONFIRMED",
+      "notes": "Chỉ giữ khi quy ước nghiệp vụ xác nhận dấu ngoặc là phần bắt buộc của giá trị mô tả."
+    },
+    {
+      "id": "GT-001",
+      "page": 1,
+      "field": "company_name",
+      "source_image": "page1.png",
+      "expected_value": "THE SECURE HOUSE JOINT STOCK COMPANY (NHA AN TOAN.,JSC)",
+      "actual_ocr": "NHA AN TOAN",
+      "status": "CONFIRMED",
+      "notes": "OCR thiếu tên công ty đầy đủ; ảnh gốc cho thấy tên công ty đầy đủ và con dấu NHA AN TOAN."
+    },
+    {
+      "id": "GT-002",
+      "page": 1,
+      "field": "brand",
+      "source_image": "page1.png",
+      "expected_value": "SECURE",
+      "actual_ocr": "SEEURE",
+      "status": "CONFIRMED",
+      "notes": "OCR nhầm chữ U và E ở nhãn thương hiệu."
+    },
+    {
+      "id": "GT-003",
+      "page": 1,
+      "field": "certificate_title",
+      "source_image": "page1.png",
+      "expected_value": "Certificate of Quality & Quantity",
+      "actual_ocr": "icate of Quality &",
+      "status": "CONFIRMED",
+      "notes": "OCR cắt mất phần đầu của tiêu đề."
+    },
+    {
+      "id": "GT-006",
+      "page": 1,
+      "field": "contract_number",
+      "source_image": "page1.png",
+      "expected_value": "HKNHNA0524-03",
+      "actual_ocr": "HIKNHA0524-03",
+      "status": "CONFIRMED",
+      "notes": "OCR sai ký tự đầu mã hợp đồng."
+    },
+    {
+      "id": "GT-005",
+      "page": 1,
+      "field": "date",
+      "source_image": "page1.png",
+      "expected_value": "May 28, 2024",
+      "actual_ocr": "May 28,2024",
+      "status": "NOT_AN_ERROR",
+      "notes": "Khác biệt khoảng trắng sau dấu phẩy; không tính là lỗi OCR sau chuẩn hóa khoảng trắng."
+    }
+  ],
+  "pending_cases": [
+    {
+      "id": "GT-P2-004",
+      "page": 2,
+      "field": "model",
+      "model": "DS-2CD3021G0",
+      "source_image": "page2.png",
+      "expected_value": null,
+      "actual_ocr": "...-IMP",
+      "status": "PENDING",
+      "notes": "Cần kiểm tra rõ ký tự cuối của model trên ảnh độ phân giải cao."
+    },
+    {
+      "id": "GT-004",
+      "page": 1,
+      "field": "certificate_number",
+      "source_image": "page1.png",
+      "expected_value": null,
+      "actual_ocr": null,
+      "status": "PENDING",
+      "notes": "Chưa xác định số chứng chỉ riêng của trang 1 từ nguồn phù hợp."
+    }
+  ]
+}
