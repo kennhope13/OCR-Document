@@ -82,6 +82,8 @@ def _process_pdf_file(file_path, file_name):
     for page_idx, image in enumerate(images):
         image_np = np.array(image)
         ocr_result = get_ocr_model().ocr(image_np, cls=True)
+        if not ocr_result or not ocr_result[0]:
+            return None
         create_docx(ocr_result, f"{Path(file_name).stem}_page_{page_idx + 1}.docx")
     return ocr_result
 
@@ -100,5 +102,7 @@ def process_image(file_stream, file_name):
         file_stream.seek(0)
 
     ocr_result = get_ocr_model().ocr(image_np, cls=True)
+    if not ocr_result or not ocr_result[0]:
+        return None
     create_docx(ocr_result, file_name)
     return ocr_result

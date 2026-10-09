@@ -12,17 +12,30 @@ except ImportError:  # pragma: no cover - optional dependency for tests
 def create_docx(ocr_result, file_name):
     if Document is None:
         raise RuntimeError("python-docx is not installed. Please install project dependencies.")
+    if not ocr_result or not isinstance(ocr_result, (list, tuple)):
+        raise ValueError("OCR result is empty or invalid.")
+
+    items = ocr_result[0] if isinstance(ocr_result[0], (list, tuple)) else ocr_result
+    if not items:
+        raise ValueError("OCR result is empty or invalid.")
 
     min_width = float('inf')
     doc = Document()
-    for item in ocr_result[0]:
+    for item in items:
+        if not isinstance(item, (list, tuple)) or len(item) < 2:
+            continue
+
         coordinates = item[0]
         text = item[1]
+        if not isinstance(text, (list, tuple)) or not text:
+            continue
         text_values = text[0]
-        x1, y1 = coordinates[0][0], coordinates[0][1]
+        if not isinstance(coordinates, (list, tuple)) or len(coordinates) < 4:
+            continue
 
+        x1, y1 = coordinates[0][0], coordinates[0][1]
         paragraph = doc.add_paragraph()
-        run = paragraph.add_run(text_values)
+        run = paragraph.add_run(str(text_values))
 
         width = coordinates[1][0] - coordinates[0][0]
         height = coordinates[2][1] - coordinates[0][1]
