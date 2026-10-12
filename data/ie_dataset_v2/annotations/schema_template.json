@@ -1,0 +1,61 @@
+{
+  "$schema": "Bản nháp Schema V2 cho IE Dataset",
+  "document_id": "DOC-0001",
+  "document_type": "certificate",
+  "source_file": "DOC-0001.pdf",
+  "notes": "Mẫu template cho Giai đoạn B: Tập trung vào Document-Level thay vì Field-Level.",
+  "fields": {
+    "contract_number": {
+      "expected_value": "HKNHNA0524-03",
+      "presence": "PRESENT",
+      "verification_status": "CONFIRMED",
+      "page": 1,
+      "bounding_box": [100, 200, 300, 250],
+      "notes": "Số hợp đồng bán hàng (Sales Contract No.)"
+    },
+    "date": {
+      "expected_value": "May 28, 2024",
+      "presence": "PRESENT",
+      "verification_status": "CONFIRMED",
+      "page": 1,
+      "bounding_box": null
+    },
+    "recipient_company": {
+      "expected_value": "THE SECURE HOUSE JOINT STOCK COMPANY (NHA AN TOAN.,JSC)",
+      "presence": "PRESENT",
+      "verification_status": "CONFIRMED",
+      "page": 1,
+      "role": "recipient",
+      "notes": "Công ty nhận chứng nhận (Thường nằm sau từ khóa 'We,' hoặc ở vị trí 'To:')"
+    },
+    "issuer_company": {
+      "expected_value": "Hangzhou Hikvision Technology Co., Ltd.",
+      "presence": "PRESENT",
+      "verification_status": "CONFIRMED",
+      "page": 1,
+      "role": "issuer"
+    },
+    "missing_field_example": {
+      "expected_value": null,
+      "presence": "ABSENT",
+      "verification_status": "CONFIRMED",
+      "page": null,
+      "bounding_box": null,
+      "notes": "Ví dụ về một trường không xuất hiện trong tài liệu."
+    },
+    "unreadable_field_example": {
+      "expected_value": null,
+      "presence": "UNREADABLE",
+      "verification_status": "CONFIRMED",
+      "page": 2,
+      "bounding_box": [50, 50, 100, 100],
+      "notes": "Trường có xuất hiện nhưng bị mờ không thể đọc bằng mắt thường."
+    },
+    "pending_field_example": {
+      "expected_value": "ABC",
+      "presence": "PRESENT",
+      "verification_status": "PENDING",
+      "notes": "Chưa được xác minh chéo."
+    }
+  }
+}

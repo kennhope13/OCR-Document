@@ -1,2 +1,33 @@
-__pycache__
-configs
+# Python virtual environment
+.venv/
+venv/
+ENV/
+env/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.log
+
+# Artifacts & Temporary outputs
+artifacts/
+output/
+temp/
+*.tmp
+*.docx
+*.pdf
+*.png
+*.jpg
+*.jpeg
+!tests/fixtures/*.png
+!tests/fixtures/*.json
+!brand_region.png
+!page1.png
+!page2.png
+!page3.png
+
+# Configuration and secrets
+configs/
+*.json.secret
+.env

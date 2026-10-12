@@ -119,7 +119,7 @@
       "source_image": "page1.png",
       "expected_value": "May 28, 2024",
       "actual_ocr": "May 28,2024",
-      "status": "CONFIRMED",
+      "status": "NOT_AN_ERROR",
       "notes": "Khác biệt khoảng trắng sau dấu phẩy; không tính là lỗi OCR sau chuẩn hóa khoảng trắng."
     }
   ],

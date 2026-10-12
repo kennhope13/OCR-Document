@@ -59,27 +59,38 @@ def _write_temp_pdf(file_bytes, suffix='.pdf'):
 
 
 # Xử lý pdf
-def process_pdf(file_path_or_bytes, file_name='document.pdf'):
+def process_pdf(file_path_or_bytes, file_name='document.pdf', use_enhancement=False):
     if isinstance(file_path_or_bytes, (bytes, bytearray)):
         temp_path = _write_temp_pdf(bytes(file_path_or_bytes), suffix='.pdf')
         try:
-            return _process_pdf_file(temp_path, file_name)
+            return _process_pdf_file(temp_path, file_name, use_enhancement)
         finally:
             if os.path.exists(temp_path):
                 os.remove(temp_path)
 
-    return _process_pdf_file(file_path_or_bytes, file_name)
+    return _process_pdf_file(file_path_or_bytes, file_name, use_enhancement)
 
 
-def _process_pdf_file(file_path, file_name):
+def _process_pdf_file(file_path, file_name, use_enhancement=False):
     if convert_from_path is None:
         raise RuntimeError("pdf2image is not installed. Please install project dependencies.")
     if create_docx is None:
         raise RuntimeError("python-docx is not installed. Please install project dependencies.")
 
-    images = convert_from_path(file_path)
+    from PIL import ImageEnhance
+    
+    # Baseline A: dpi=200. Baseline B (Enhanced): dpi=300
+    current_dpi = 300 if use_enhancement else 200
+    images = convert_from_path(file_path, dpi=current_dpi)
     page_results = []
+    
     for page_idx, image in enumerate(images):
+        if use_enhancement:
+            enhancer = ImageEnhance.Contrast(image)
+            image = enhancer.enhance(2.0)
+            sharpness = ImageEnhance.Sharpness(image)
+            image = sharpness.enhance(2.0)
+            
         image_np = np.array(image)
         page_result = get_ocr_model().ocr(image_np, cls=True)
         if not page_result or not page_result[0]:

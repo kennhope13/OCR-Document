@@ -17,7 +17,7 @@ class DummyModel:
 
 
 def test_process_pdf_skips_empty_pages(monkeypatch):
-    def fake_convert_from_path(path):
+    def fake_convert_from_path(path, **kwargs):
         return [Image.new('RGB', (200, 200), 'white'), Image.new('RGB', (200, 200), 'white')]
 
     model = DummyModel()

@@ -1,0 +1,30 @@
+{
+  "document_id": "SYN-02-CLEAN",
+  "source_file": "SYN-02-CLEAN.pdf",
+  "metadata": {
+    "description": "Digital clean text"
+  },
+  "fields": {
+    "contract_number": {
+      "expected_value": "SYN-CLN-2024",
+      "presence": "PRESENT",
+      "verification_status": "CONFIRMED"
+    },
+    "date": {
+      "expected_value": "October 10, 2024",
+      "presence": "PRESENT",
+      "verification_status": "CONFIRMED"
+    },
+    "recipient_company": {
+      "expected_value": "XYZ TRADING LTD",
+      "presence": "PRESENT",
+      "verification_status": "CONFIRMED"
+    },
+    "issuer_company": {
+      "expected_value": "Global Tech Inc",
+      "presence": "PRESENT",
+      "verification_status": "PENDING"
+    }
+  },
+  "line_items": []
+}

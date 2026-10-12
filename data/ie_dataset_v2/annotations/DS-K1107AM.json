@@ -1,0 +1,87 @@
+{
+  "document_id": "DS-K1107AM",
+  "document_type": "certificate",
+  "source_file": "DS-K1107AM.pdf",
+  "fields": {
+    "contract_number": {
+      "expected_value": "HKNHNA0524-03",
+      "presence": "PRESENT",
+      "verification_status": "CONFIRMED",
+      "page": 1,
+      "bounding_box": null
+    },
+    "date": {
+      "expected_value": "May 28, 2024",
+      "presence": "PRESENT",
+      "verification_status": "CONFIRMED",
+      "page": 1,
+      "bounding_box": null
+    },
+    "recipient_company": {
+      "expected_value": "THE SECURE HOUSE JOINT STOCK COMPANY (NHA AN TOAN.,JSC)",
+      "presence": "PRESENT",
+      "verification_status": "CONFIRMED",
+      "page": 1,
+      "role": "recipient",
+      "bounding_box": null
+    },
+    "issuer_company": {
+      "expected_value": "Hangzhou Hikvision Technology Co., Ltd.",
+      "presence": "PRESENT",
+      "verification_status": "PENDING",
+      "page": 1,
+      "role": "issuer",
+      "bounding_box": null
+    }
+  },
+  "line_items": [
+    {
+      "item_id": "GT-P2-001",
+      "fields": {
+        "description": {
+          "expected_value": "including mouse, cables and adapter",
+          "presence": "PRESENT",
+          "verification_status": "CONFIRMED",
+          "page": 2,
+          "bounding_box": [1540, 2360, 1890, 2465]
+        }
+      }
+    },
+    {
+      "item_id": "GT-P2-002",
+      "fields": {
+        "description": {
+          "expected_value": "with adapter",
+          "presence": "PRESENT",
+          "verification_status": "CONFIRMED",
+          "page": 2,
+          "bounding_box": [1550, 1000, 1790, 1070]
+        }
+      }
+    },
+    {
+      "item_id": "GT-P2-003",
+      "fields": {
+        "model": {
+          "expected_value": "DS-2CE76D0T-EXLPF",
+          "presence": "PRESENT",
+          "verification_status": "CONFIRMED",
+          "page": 2,
+          "bounding_box": [445, 1340, 850, 1410]
+        }
+      }
+    },
+    {
+      "item_id": "GT-P3-001",
+      "fields": {
+        "quantity": {
+          "expected_value": "60 PCS",
+          "presence": "PRESENT",
+          "verification_status": "CONFIRMED",
+          "page": 3,
+          "bounding_box": [1875, 1110, 2025, 1170]
+        }
+      }
+    }
+  ]
+}

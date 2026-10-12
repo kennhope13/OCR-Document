@@ -1,0 +1,30 @@
+{
+  "document_id": "SYN-05-SKEW",
+  "source_file": "SYN-05-SKEW.pdf",
+  "metadata": {
+    "description": "Skewed and reordered"
+  },
+  "fields": {
+    "contract_number": {
+      "expected_value": "SYN-SKEW-2024",
+      "presence": "PRESENT",
+      "verification_status": "CONFIRMED"
+    },
+    "date": {
+      "expected_value": "October 13, 2024",
+      "presence": "PRESENT",
+      "verification_status": "CONFIRMED"
+    },
+    "recipient_company": {
+      "expected_value": "ROTATED LOGISTICS JSC",
+      "presence": "PRESENT",
+      "verification_status": "CONFIRMED"
+    },
+    "issuer_company": {
+      "expected_value": "Global Tech Inc",
+      "presence": "PRESENT",
+      "verification_status": "PENDING"
+    }
+  },
+  "line_items": []
+}

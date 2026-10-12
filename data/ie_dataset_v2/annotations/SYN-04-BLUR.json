@@ -1,0 +1,30 @@
+{
+  "document_id": "SYN-04-BLUR",
+  "source_file": "SYN-04-BLUR.pdf",
+  "metadata": {
+    "description": "Low contrast and blur"
+  },
+  "fields": {
+    "contract_number": {
+      "expected_value": "SYN-BLU-2024",
+      "presence": "PRESENT",
+      "verification_status": "CONFIRMED"
+    },
+    "date": {
+      "expected_value": "October 12, 2024",
+      "presence": "PRESENT",
+      "verification_status": "CONFIRMED"
+    },
+    "recipient_company": {
+      "expected_value": "BLURRY VISION JOINT STOCK COMPANY",
+      "presence": "PRESENT",
+      "verification_status": "CONFIRMED"
+    },
+    "issuer_company": {
+      "expected_value": "Global Tech Inc",
+      "presence": "PRESENT",
+      "verification_status": "PENDING"
+    }
+  },
+  "line_items": []
+}

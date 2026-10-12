@@ -1,0 +1,30 @@
+{
+  "document_id": "SYN-03-NOISY",
+  "source_file": "SYN-03-NOISY.pdf",
+  "metadata": {
+    "description": "Scanned with noise"
+  },
+  "fields": {
+    "contract_number": {
+      "expected_value": "SYN-NOI-2024",
+      "presence": "PRESENT",
+      "verification_status": "CONFIRMED"
+    },
+    "date": {
+      "expected_value": "October 11, 2024",
+      "presence": "PRESENT",
+      "verification_status": "CONFIRMED"
+    },
+    "recipient_company": {
+      "expected_value": "NOISY DATA COMPANY",
+      "presence": "PRESENT",
+      "verification_status": "CONFIRMED"
+    },
+    "issuer_company": {
+      "expected_value": "Global Tech Inc",
+      "presence": "PRESENT",
+      "verification_status": "PENDING"
+    }
+  },
+  "line_items": []
+}
