@@ -1,113 +1,107 @@
-# BE-OCR Core: End-to-End Document Reconstruction & Intelligence Pipeline
+# BE-OCR Core: Kiến Trúc & Quy Trình Tái Tạo Văn Bản (Document OCR & Reconstruction Pipeline)
 
-Dự án xử lý OCR nâng cao, phân tích cấu trúc trang văn bản (Layout Analysis), trích xuất thực thể thông tin (Information Extraction) và **tái tạo trung thực 1:1 văn bản quét (Scanned Document) sang định dạng Microsoft Word (.docx)** có thể chỉnh sửa trực tiếp.
-
----
-
-## 🌟 Tính Năng Nổi Bật
-
-### 1. Tái Tạo Văn Bản Quét Sang Word 100% Trung Thực (Pixel-Level to Native DOCX)
-- **Tự động khử nghiêng (Adaptive Deskewing)**: Khôi phục văn bản bị lệch xoay từ $\pm 1.2^\circ$ đến $20^\circ$.
-- **Tái tạo bảng biểu thích ứng (Adaptive Table Extraction)**:
-  - Tự động phát hiện viền bảng mờ, viền đứt nét bằng hình thái học thích ứng (Morphological kernels tỷ lệ động).
-  - Tự động nhận diện gộp ô ngang/dọc (`colspan`, `rowspan`), phân tách ma trận ô dữ liệu phức tạp (như danh sách linh kiện, số serial máy tính).
-- **Phân tách Run đa sắc & kiểu dáng (Multi-Run Styling)**:
-  - Nhận diện màu mực bút bi xanh (HSV blue mask) và phân tách trong từng dòng: Nhãn trường in sẵn mang **chữ đen chuẩn**, chữ viết tay điền thêm mang **chữ xanh thực tế**.
-  - Tự động nhận diện chữ gạch chân (Underline), in đậm (Bold), in nghiêng (Italic), cỡ chữ linh hoạt theo DPI ảnh scan.
-- **Khử nhiễu hàng chấm (Dotted Fill-in Line Cleanup)**:
-  - Loại bỏ hiện tượng nét bút bi đè lên hàng chấm in sẵn gây nhận dạng sai chữ cái (`: khạm. Minh... Tiên` $\rightarrow$ `Phạm Minh Tiên`).
-- **Khớp thực thể danh tính chéo trang (Cross-Entity Co-Reference)**:
-  - Khôi phục chữ viết tay mờ/nhiễu dựa trên đối soát thực thể với chữ ký đại diện hợp lệ ở cuối tài liệu (hoàn toàn không hardcode).
-- **Dựng Layout hành chính chuyên nghiệp**:
-  - Tiêu đề Quốc hiệu & Logo 2 cột không viền (Header 2-column borderless layout).
-  - Khối chữ ký song song 2 bên (Đại diện bên giao - Bên nhận) tích hợp ảnh crop chữ ký thực tế.
-
-### 2. Trích Xuất & Hiệu Đính Thực Thể Thông Tin (IE & Correction Layer)
-- Trích xuất thông tin hợp đồng, số hóa đơn, số C/O, C/Q, thông tin bên giao/nhận, danh mục hàng hóa.
-- Lớp chuẩn hóa tên hàng hóa (Commodity Normalizer) và luật sửa lỗi chính tả OCR (Correction Rules).
-
-### 3. Giao Diện Kiểm Thử Trực Quan (Streamlit UI Dashboard)
-- Cho phép tải tài liệu PDF/ảnh quét lên và xem so sánh song song giữa ảnh quét gốc và tài liệu Word được sinh ra theo từng trang.
-- Hỗ trợ tải về file `.docx` hoàn chỉnh.
+Tài liệu đặc tả kiến trúc kỹ thuật của hệ thống OCR và tái tạo tài liệu quét (Scanned PDF / Image) sang định dạng Microsoft Word (`.docx`) giữ nguyên cấu trúc hình học, kiểu chữ, màu sắc và kích thước tương đương bản gốc.
 
 ---
 
-## 📁 Cấu Trúc Dự Án
+## 🏗️ 1. Các Mô Hình Học Máy (Models & Engines)
 
-```text
-be-ocr-core/
-├── app.py                      # Flask API Service phục vụ tích hợp
-├── ui_test_dashboard.py        # Giao diện Streamlit tương tác kiểm thử tài liệu
-├── pipeline/
-│   ├── document_reconstructor.py   # Lõi phân tích bố cục, khử nhiễu & phân loại phần tử
-│   ├── adaptive_table_extractor.py # Thuật toán trích xuất bảng & gộp ô ma trận thích ứng
-│   ├── docx_builder.py             # Dựng file Microsoft Word (.docx) chuẩn cấu trúc & định dạng
-│   ├── deskew.py                   # Thuật toán khử xoay nghiêng ảnh
-│   └── language_detector.py        # Nhận diện ngôn ngữ văn bản
-├── ie/                         # Lớp trích xuất thông tin (Information Extraction)
-│   ├── schema.py               # Pydantic schemas cho dữ liệu trích xuất
-│   └── correction/             # Lớp chuẩn hóa và sửa lỗi hậu OCR
-├── ocr/                        # OCR handlers (VietOCR, PaddleOCR)
-├── tests/                      # Bộ kiểm thử đơn vị & hồi quy (Unit & Regression Tests)
-├── requirements.txt            # Danh sách thư viện phụ thuộc
-└── README.md                   # Tài liệu hướng dẫn dự án
+Hệ thống kết hợp mô hình thị giác máy tính chuyên biệt và mô hình chuỗi nhận dạng ký tự:
+
+| Thành phần | Công nghệ / Model | Vai trò kỹ thuật |
+| :--- | :--- | :--- |
+| **Phân tích Bố cục (Layout Analysis)** | **PaddleOCR - PP-Structure** (`table=True, ocr=True`) | Phát hiện vùng bảng (`table`), khối văn bản (`text`), hình ảnh (`figure`), tiêu đề (`header`). |
+| **Nhận dạng Chữ in (Printed OCR)** | **PaddleOCR v4 (Vietnamese/English)** | Trích xuất text in chuẩn công vụ, text trong bảng biểu, nhãn form. |
+| **Nhận dạng Viết tay (Handwriting OCR)** | **VietOCR (VGG-Transformer)** | Nhận dạng chữ viết tay điền thêm trên form, tên người ký, chức vụ. |
+| **Hình thái học & Xử lý Ảnh (Computer Vision)** | **OpenCV (`cv2`) & NumPy** | Khử nghiêng (Deskew), phân đoạn màu mực (HSV segmentation), trích xuất đường lưới hình học (Morphological Grids). |
+
+---
+
+## 🔄 2. Quy Trình Xử Lý OCR Toàn Diện (End-to-End Pipeline)
+
+```mermaid
+flowchart TD
+    A["Ảnh Quét / PDF Gốc (300 DPI)"] --> B["1. Tiền xử lý & Khử nghiêng (Deskew)"]
+    B --> C["2. Phân loại Khối & Bố cục Trang (Layout Segmentation)"]
+    C --> D["3. Tách Bảng & Lưới Hình học Thích ứng (Adaptive Grid)"]
+    C --> E["4. Phân đoạn Màu Mực & Kiểu Chữ (HSV & Stroke Analysis)"]
+    C --> F["5. Khử Nhiễu Dòng Kẻ Chấm (Dotted Line Filter)"]
+    D --> G["6. Tính Toán Kích Cỡ Hình Học 1:1 (Geometric Mapping)"]
+    E --> G
+    F --> G
+    G --> H["7. Đối Soát Thực Thể Chữ Ký (Co-Reference Resolution)"]
+    H --> I["8. Dựng Word Đa Sắc (Multi-Run DOCX Builder)"]
 ```
 
 ---
 
-## 🚀 Hướng Dẫn Cài Đặt
+## ⚙️ 3. Chi Tiết Các Công Đoạn Kỹ Thuật
 
-### 1. Yêu Cầu Môi Trường
-- Python >= 3.10
-- Windows / Linux / macOS
-- Đã cài đặt Git
+### Bước 1: Tiền Xử Lý Hình Ảnh (Image Preprocessing & Deskew)
+- **Chuẩn hóa kích thước & phân giải**: Ảnh quét từ PDF được trích xuất ở mức $150 - 300\text{ DPI}$ để bảo tồn nét mực mảnh và viền bảng.
+- **Tự động khử xoay nghiêng (Deskew)**:
+  - Áp dụng bộ lọc Canny cạnh kết hợp phép biến đổi **Hough Line Transform** (`cv2.HoughLinesP`).
+  - Lọc các đường thẳng gần nằm ngang ($|\theta| \le 20^\circ$) với độ dài tối thiểu $\ge 8\text{ đoạn}$.
+  - Tính góc nghiêng trung vị $\theta_{\text{median}}$ và xoay affine lại ảnh nếu góc nghiêng vượt ngưỡng nhạy cảm ($|\theta| \ge 1.2^\circ$).
 
-### 2. Cài Đặt Thư Viện
+### Bước 2: Bóc Tách Bảng Thích Ứng (Adaptive Table Line & Grid Detection)
+Thay vì dùng ngưỡng cố định (dễ làm mất viền mờ hoặc đứt nét), hệ thống dùng **Morphological Kernels thích ứng**:
+- **Trích xuất viền ngang (`h_morph`)**: Kernel kích thước $\left(\max(12, \text{width} \times 0.025), 1\right)$.
+- **Trích xuất viền dọc (`v_morph`)**: Kernel kích thước $\left(1, \max(12, \text{height} \times 0.025)\right)$.
+- **Ngưỡng nhị phân động**: Ngưỡng tổng mật độ pixel của hàng/cột:
+  $$\text{threshold}_h = \max(0.12 \times W, 0.35 \times \text{max\_row\_sum})$$
+  $$\text{threshold}_v = \max(0.12 \times H, 0.30 \times \text{max\_col\_sum})$$
+- **Xác định tọa độ ô & Gộp ô động (Cell Span Resolution)**:
+  - Giao điểm viền ngang và dọc tạo thành ma trận tọa độ $(x_i, y_j)$.
+  - Quét kiểm tra viền ngăn cách giữa các ô lân cận. Nếu một hàng không có vách ngăn dọc (như dòng ghi chú model sản phẩm `Máy tính xách tay ASUS...`), hệ thống tự động gộp ô (`colspan`) mà không làm hỏng cấu trúc các ô 4 cột phía dưới.
 
-```bash
-# Tạo môi trường ảo
-python -m venv .venv
+### Bước 3: Phân Đoạn Màu Mực & Kiểu Chữ (Color, Style & Stroke Analysis)
+- **Tách màu mực bút bi xanh (Handwritten Blue Ink Detection)**:
+  - Chuyển vùng ảnh sang không gian màu **HSV**:
+    $$\text{Hue} \in [90, 135], \quad \text{Saturation} \ge 45, \quad \text{Value} \in [40, 230]$$
+  - Tính tỷ lệ pixel xanh trên tổng pixel nét tối ($\text{ratio}_{\text{blue}} > 0.15$ và số pixel xanh $> 250$).
+  - Nếu thỏa mãn: Vùng chữ được gán mã màu xanh bút mực thực tế `RGB(0, 70, 185)`.
+- **Nhận diện Gạch Chân (Underline Detection)**:
+  - Cắt dải đáy của bounding box ($15\%$ chiều cao chân chữ).
+  - Áp dụng kernel ngang mở rộng $\left(\text{width} \times 0.6, 1\right)$. Nếu phát hiện nét thẳng dài liên tục, gán cờ `underline = True`.
+- **Nhận diện In Đậm (Bold) & In Nghiêng (Italic)**:
+  - Phân tích độ dày nét chữ (Stroke Width Transform / Pixel Density) và góc nghiêng của các đường thẳng đứng trong từ.
 
-# Kích hoạt môi trường (Windows PowerShell)
-.venv\Scripts\Activate.ps1
-# (Hoặc trên Linux/macOS: source .venv/bin/activate)
-
-# Cài đặt các gói phụ thuộc
-pip install -r requirements.txt
-```
-
----
-
-## 💻 Hướng Dẫn Sử Dụng
-
-### 1. Khởi Chạy Giao Diện Kiểm Thử Streamlit
-Để xem trước và tái tạo trực quan các tài liệu scan phức tạp:
-```bash
-streamlit run ui_test_dashboard.py
-```
-Truy cập trình duyệt tại `http://localhost:8501`, tải lên file PDF (ví dụ Biên bản bàn giao, Invoice, Hợp đồng) và bấm **Bắt đầu Tái tạo Document**.
-
-### 2. Khởi Chạy API Service
-```bash
-python app.py
-```
-Dịch vụ chạy tại `http://localhost:5000`.
-
----
-
-## 🧪 Chạy Kiểm Thử (Tests)
-
-Chạy bộ test tự động để đảm bảo độ chính xác của pipeline:
-```bash
-pytest
-```
-Hoặc chạy kiểm thử riêng module tái tạo bảng và tài liệu:
-```bash
-pytest tests/pipeline/test_docx_builder.py
-pytest tests/pipeline/test_table_parser.py
-```
+### Bước 4: Khử Nhiễu Dòng Kẻ Chấm (Dotted Line Noise Filter)
+- **Vấn đề thực tế**: Văn bản hành chính có hàng chấm in sẵn: `Đại diện bên giao: .............................`. Khi ký hoặc viết tay đè lên, các nét bút bi giao cắt với hàng chấm khiến OCR nhận nhầm nét chữ (ví dụ: chữ `P` bị gãy thành `: khạm. Minh... Tiên`).
+- **Xử lý**:
+  - Lọc hình thái dọn các hạt chấm nhỏ cô lập nằm dưới nét chữ chính.
+  - Áp dụng regex khử chuỗi chấm lặp (`\.{2,}`) và chấm kẹp giữa chữ (`([a-zA-ZÀ-ỹ])\.\s+([a-zA-ZÀ-ỹ])`).
+  - **Khớp thực thể danh tính chéo trang (Cross-Entity Co-Reference)**: Lấy tên đại diện chuẩn ở khối chữ ký cuối văn bản (nơi tên được in hoặc nhận dạng rõ nét) làm từ điển đối soát. Dùng thuật toán so khớp mờ (`SequenceMatcher` tỷ lệ $\ge 0.70$) để khôi phục chữ viết tay mờ/lỗi mà hoàn toàn **không cần hardcode**.
 
 ---
 
-## 📜 Bản Quyền
-Dự án được phát triển phục vụ công tác số hóa, xử lý văn bản hành chính và tài liệu hải quan tự động.
+## 📐 4. Phương Pháp Chuẩn Hóa Kích Cỡ & Tỷ Lệ (1:1 Dimensional Mapping)
+
+Để văn bản Word sau khi sinh có kích thước khớp với bản in:
+
+1. **Khổ giấy & Căn lề trang (Page Dimensions & Margins)**:
+   - Dựa trên tỷ lệ khung trang gốc:
+     $$\text{Nếu } W > H \implies \text{Khổ A4 Ngang } (11.69'' \times 8.27'')$$
+     $$\text{Nếu } W \le H \implies \text{Khổ A4 Dọc } (8.27'' \times 11.69'')$$
+   - Căn lề 4 phía chuẩn: $0.5''$ (Top, Bottom, Left, Right). Khổ rộng in khả dụng:
+     $$W_{\text{printable}} = W_{\text{page}} - 2 \times \text{Margin}$$
+
+2. **Quy đổi Cỡ Chữ Thực Tế (Font Size Pt Calculation)**:
+   - Cỡ chữ được tính toán động trực tiếp từ chiều cao hộp bao (Bounding Box Height) theo độ phân giải ảnh quét ($\text{DPI}$):
+     $$\text{Size (pt)} = \text{round}\left(\frac{\text{bbox\_height}}{\text{DPI}} \times 72 \times 0.85 \times 2\right) / 2$$
+   - Giúp tiêu đề, thân bài, ghi chú chân trang tự động có cỡ chữ tương quan chính xác ($12\text{pt}$, $11\text{pt}$, $8.5\text{pt}$, $6.5\text{pt}$).
+
+3. **Tỷ Lệ Bề Rộng Cột Bảng (Proportional Table Column Widths)**:
+   - Chiều rộng của từng cột $j$ trong bảng Word được gán theo tỷ lệ phần trăm tọa độ lưới thực tế:
+     $$\text{Width}_j (\text{inch}) = W_{\text{printable}} \times \left(\frac{x_{j+1} - x_j}{\sum \Delta x}\right)$$
+   - Thiết lập thuộc tính XML `w:cantSplit` cho từng hàng và `w:tblHeader` cho hàng tiêu đề nhằm chống gãy vỡ layout khi chuyển trang.
+
+4. **Tách Run Đa Sắc Trong Đoạn Văn (Multi-Run Formatting)**:
+   - Trong cùng một câu có cả chữ in sẵn và chữ viết tay điền thêm:
+     - Nhãn in sẵn (`Đại diện bên giao:`, `Chức vụ:`) $\rightarrow$ Text Run **Màu Đen** (`#000000`).
+     - Nội dung điền tay (`Phạm Minh Tiên`, `Thủ kho`) $\rightarrow$ Text Run **Màu Xanh Mực** (`#0046B9`).
+
+5. **Tổ Chức Layout 2 Cột Không Viền (Borderless 2-Column Structures)**:
+   - **Khối Đầu Trang**: Logo bên trái và Quốc hiệu / Ngày tháng bên phải được dàn vào bảng 2 cột ẩn viền (`border = none`), đảm bảo căn lề song song tuyệt đối.
+   - **Khối Chữ Ký**: Tên chức danh bên giao / bên nhận ở hàng 1, ảnh crop chữ ký thực tế ở hàng 2, và họ tên đại diện ở hàng 3.
