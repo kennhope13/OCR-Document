@@ -1,18 +1,40 @@
 import io
 import os
-import traceback
+import uuid
+import logging
+from pathlib import Path
+from typing import Optional
 
-from flask import Flask, after_this_request, jsonify, request, send_file
+from flask import Flask, jsonify, request, send_from_directory, send_file
+from werkzeug.utils import secure_filename
 from google.auth.credentials import AnonymousCredentials
 from google.cloud import storage
-from PIL import Image
-import numpy as np
 
-from documents.docx_handler import create_docx
-from ocr.ocr_handler import detect_file_kind, is_supported_file, process_image, process_pdf
-from preprocessing_image.preprocessing_image import deskew
+from pipeline.unified_engine import UnifiedDocumentEngine, SecurityValidationError, DocumentProcessingError
+from ocr.ocr_handler import detect_file_kind, is_supported_file
+
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+
+# Security Configurations
+app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024  # 32MB Max Upload Limit
+BASE_DIR = Path(__file__).resolve().parent
+LOCAL_OUTPUT_DIR = BASE_DIR / "output" / "image_to_word"
+LOCAL_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+# Shared Unified Engine instance
+_engine: Optional[UnifiedDocumentEngine] = None
+
+
+def get_engine() -> UnifiedDocumentEngine:
+    global _engine
+    if _engine is None:
+        _engine = UnifiedDocumentEngine(
+            lang=os.getenv("OCR_LANG", "vi"),
+            artifacts_dir=str(BASE_DIR / "artifacts" / "reconstruct")
+        )
+    return _engine
 
 
 def get_storage_client():
@@ -38,85 +60,103 @@ def ensure_bucket_exists(bucket):
 @app.route('/convert', methods=['POST'])
 def convert_ocr():
     try:
-        file_name = request.form.get('file_name')
-        if not file_name:
-            return jsonify({"error": "No file_name provided."}), 400
-
-        file_bytes = request.files.get('file')
-        if file_bytes is None:
+        raw_file_name = request.form.get('file_name', '')
+        file_obj = request.files.get('file')
+        if file_obj is None:
             return jsonify({"error": "No file uploaded."}), 400
 
-        file_bytes = file_bytes.read()
-        file_kind = detect_file_kind(file_name, file_bytes)
-        if not is_supported_file(file_name, file_bytes):
+        # Read content safely
+        file_bytes = file_obj.read()
+        if not file_bytes:
+            return jsonify({"error": "Uploaded file is empty."}), 400
+
+        # Validate file kind and extension
+        file_kind = detect_file_kind(raw_file_name, file_bytes)
+        if not is_supported_file(raw_file_name, file_bytes):
             return jsonify({"error": "Unsupported file format."}), 400
 
-        if file_kind == 'image':
-            image = Image.open(io.BytesIO(file_bytes))
-            image_np = np.array(image)
-            pre_file_img = deskew(image_np)
+        # Generate a safe, collision-free server-side filename
+        safe_base_name = secure_filename(Path(raw_file_name).stem) or "document"
+        unique_file_id = f"{safe_base_name}_{uuid.uuid4().hex[:8]}.docx"
+        target_docx_path = LOCAL_OUTPUT_DIR / unique_file_id
 
-            image_format = file_name.split('.')[-1].lower()
-            pillow_format = {"jpg": "JPEG", "jpeg": "JPEG", "png": "PNG"}
-            if image_format not in pillow_format:
-                return jsonify({"error": "Unsupported image format."}), 400
+        # Execute unified processing pipeline
+        engine = get_engine()
+        saved_docx, page_layouts = engine.process_file_bytes(
+            file_bytes=file_bytes,
+            file_kind=file_kind,
+            output_docx_path=target_docx_path,
+        )
 
-            file_stream = io.BytesIO()
-            Image.fromarray(pre_file_img).save(file_stream, format=pillow_format[image_format])
-            file_stream.seek(0)
-            ocr_result = process_image(file_stream, file_name)
-        elif file_kind == 'pdf':
-            ocr_result = process_pdf(file_bytes, file_name=file_name)
-        else:
-            return jsonify({"error": "Unsupported file format."}), 400
-
-        if not ocr_result:
-            return jsonify({"error": "OCR result is empty or invalid."}), 400
-
-        docx_file = create_docx(ocr_result, file_name)
-
-        client = get_storage_client()
-        bucket_name = get_bucket_name()
-        bucket = client.bucket(bucket_name)
-        if os.getenv("STORAGE_EMULATOR_HOST"):
-            ensure_bucket_exists(bucket)
-        blob_path_output = f"output/image_to_word/{os.path.basename(docx_file)}"
-        blob = bucket.blob(blob_path_output)
-        blob.upload_from_filename(docx_file)
-
-        if os.path.exists(docx_file):
-            os.remove(docx_file)
+        # Upload to Google Cloud Storage if configured / required
+        try:
+            client = get_storage_client()
+            bucket_name = get_bucket_name()
+            bucket = client.bucket(bucket_name)
+            if os.getenv("STORAGE_EMULATOR_HOST"):
+                ensure_bucket_exists(bucket)
+            blob_path_output = f"output/image_to_word/{unique_file_id}"
+            blob = bucket.blob(blob_path_output)
+            blob.upload_from_filename(str(saved_docx))
+        except Exception as gcs_err:
+            logger.warning(f"GCS upload skipped or failed: {gcs_err}")
 
         return jsonify({
-            "message": "OCR process completed",
-            "docx_file": os.path.basename(docx_file),
-            "download_url": f"/download/{os.path.basename(docx_file)}"
-        })
+            "message": "OCR process completed successfully",
+            "docx_file": unique_file_id,
+            "total_pages": len(page_layouts),
+            "download_url": f"/download/{unique_file_id}"
+        }), 200
 
+    except SecurityValidationError as sve:
+        return jsonify({"error": f"Security validation failed: {str(sve)}"}), 400
+    except DocumentProcessingError as dpe:
+        return jsonify({"error": f"Document processing failed: {str(dpe)}"}), 500
     except Exception as e:
-        traceback.print_exc()
+        logger.exception("Unexpected error in /convert")
         return jsonify({"error": str(e)}), 500
 
 
 @app.route('/download/<filename>', methods=['GET'])
 def download_file(filename):
-    local_path = filename
-    if os.path.exists(local_path):
-        return send_file(local_path, as_attachment=True)
+    """Safely send file from strictly restricted output directory to prevent path traversal."""
+    safe_name = secure_filename(filename)
+    if not safe_name or not safe_name.endswith('.docx'):
+        return jsonify({"error": "Invalid file requested."}), 400
 
+    local_file_path = LOCAL_OUTPUT_DIR / safe_name
+    if local_file_path.is_file():
+        return send_from_directory(
+            str(LOCAL_OUTPUT_DIR),
+            safe_name,
+            as_attachment=True,
+            mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        )
+
+    # Fallback to GCS storage if not locally present
     try:
         client = get_storage_client()
         bucket_name = get_bucket_name()
         bucket = client.bucket(bucket_name)
-        blob_path = f"output/image_to_word/{filename}"
+        blob_path = f"output/image_to_word/{safe_name}"
         blob = bucket.blob(blob_path)
         if not blob.exists():
             return jsonify({"error": "File not found"}), 404
 
         file_bytes = blob.download_as_bytes()
-        return send_file(io.BytesIO(file_bytes), as_attachment=True, download_name=filename)
+        return send_file(
+            io.BytesIO(file_bytes),
+            as_attachment=True,
+            download_name=safe_name,
+            mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        )
     except Exception:
         return jsonify({"error": "File not found"}), 404
+
+
+@app.errorhandler(413)
+def request_entity_too_large(error):
+    return jsonify({"error": "File exceeds maximum allowed upload size (32MB)."}), 413
 
 
 if __name__ == '__main__':
