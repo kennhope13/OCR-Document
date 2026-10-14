@@ -17,24 +17,55 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-# Security Configurations
+# Security & Storage Configurations
 app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024  # 32MB Max Upload Limit
 BASE_DIR = Path(__file__).resolve().parent
 LOCAL_OUTPUT_DIR = BASE_DIR / "output" / "image_to_word"
 LOCAL_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-# Shared Unified Engine instance
+# Retention / TTL Configuration for local outputs (in seconds, default 2 hours)
+OUTPUT_RETENTION_SECONDS = int(os.getenv("OUTPUT_RETENTION_SECONDS", 7200))
+
+import threading
+
+# Shared Unified Engine instance with thread-safe singleton lock
 _engine: Optional[UnifiedDocumentEngine] = None
+_engine_init_lock = threading.Lock()
 
 
 def get_engine() -> UnifiedDocumentEngine:
     global _engine
     if _engine is None:
-        _engine = UnifiedDocumentEngine(
-            lang=os.getenv("OCR_LANG", "vi"),
-            artifacts_dir=str(BASE_DIR / "artifacts" / "reconstruct")
-        )
+        with _engine_init_lock:
+            if _engine is None:
+                _engine = UnifiedDocumentEngine(
+                    lang=os.getenv("OCR_LANG", "vi"),
+                    artifacts_dir=str(BASE_DIR / "artifacts" / "reconstruct")
+                )
     return _engine
+
+
+def cleanup_expired_output_files(max_age_seconds: int = OUTPUT_RETENTION_SECONDS) -> int:
+    """Removes output files older than max_age_seconds from LOCAL_OUTPUT_DIR."""
+    import time
+    now = time.time()
+    deleted_count = 0
+    try:
+        for f in LOCAL_OUTPUT_DIR.glob("*.docx"):
+            if f.is_file():
+                file_age = now - f.stat().st_mtime
+                if file_age > max_age_seconds:
+                    try:
+                        f.unlink()
+                        deleted_count += 1
+                    except Exception as err:
+                        logger.warning(f"Failed to delete expired file {f}: {err}")
+    except Exception as e:
+        logger.warning(f"Error during output directory cleanup: {e}")
+    return deleted_count
+
+
+
 
 
 def get_storage_client():
@@ -80,8 +111,12 @@ def convert_ocr():
         unique_file_id = f"{safe_base_name}_{uuid.uuid4().hex}.docx"
         target_docx_path = LOCAL_OUTPUT_DIR / unique_file_id
 
+        # Cleanup expired output files periodically on new conversions
+        cleanup_expired_output_files()
+
         # Execute unified processing pipeline
         engine = get_engine()
+
         saved_docx, page_layouts = engine.process_file_bytes(
             file_bytes=file_bytes,
             file_kind=file_kind,

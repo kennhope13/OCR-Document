@@ -83,45 +83,90 @@ def test_convert_multi_page_pdf_success(mock_get_engine, client, tmp_path):
     assert data["download_url"].startswith("/download/")
 
 
-def test_unified_engine_real_multipage_pdf(tmp_path):
-    """Integration test: generates a real 2-page PDF, iterates through engine rasterization,
-    and checks DocxBuilder.build_from_pages creates a valid DOCX with 2 sections.
+def test_pipeline_integration_real_pdf_to_docx(tmp_path):
+    """Pipeline integration test:
+    Creates a real 2-page PDF, runs process_file_bytes() with simulated OCR layout,
+    and verifies that the resulting DOCX contains paragraphs, table contents, and correct page sections.
     """
     import fitz
-    from pipeline.unified_engine import UnifiedDocumentEngine
     from docx import Document
+    from unittest.mock import patch
+    from pipeline.unified_engine import UnifiedDocumentEngine
+    from pipeline.adaptive_table_extractor import TableResult, TableCell
 
-    # Create real 2-page PDF with PyMuPDF
+
+    # 1. Create a real 2-page PDF using PyMuPDF
     doc = fitz.open()
-    page1 = doc.new_page(width=595, height=842)
-    page1.insert_text((50, 100), "Trang 1: Cong hoa Xa hoi Chu nghia Viet Nam", fontsize=14)
-    page2 = doc.new_page(width=595, height=842)
-    page2.insert_text((50, 100), "Trang 2: Bang ke danh muc hang hoa", fontsize=14)
-
+    p1 = doc.new_page(width=595, height=842)
+    p1.insert_text((50, 100), "Trang 1: Hop dong thuong mai", fontsize=14)
+    p2 = doc.new_page(width=595, height=842)
+    p2.insert_text((50, 100), "Trang 2: Bang gia chi tiet", fontsize=14)
     pdf_bytes = doc.tobytes()
     doc.close()
 
     engine = UnifiedDocumentEngine(artifacts_dir=str(tmp_path / "artifacts"))
-    
-    # Verify generator yields exactly 2 pages with correct image shapes
-    streamed_pages = list(engine.iter_pdf_pages(pdf_bytes, dpi=72))
-    assert len(streamed_pages) == 2
-    for p_idx, img in streamed_pages:
-        assert isinstance(img, np.ndarray)
-        assert img.ndim == 3
-        assert img.shape[2] == 3  # BGR
+    out_docx_path = tmp_path / "integrated_output.docx"
 
-    # Test docx builder from multi-page layouts
-    out_docx = tmp_path / "test_multipage_out.docx"
-    layouts = [
-        PageLayout(page_index=0, width=595, height=842, elements=[]),
-        PageLayout(page_index=1, width=595, height=842, elements=[]),
-    ]
-    engine.docx_builder.build_from_pages(layouts, output_path=out_docx)
-    assert out_docx.exists()
-    assert out_docx.stat().st_size > 0
+    # 2. Simulate reconstructor.process_page returning real document elements
+    def mock_process_page(img_bgr, page_index=0, dpi=150):
+        if page_index == 0:
+            elem = LayoutElement(
+                page_index=0,
+                element_type="paragraph",
+                bbox=(50, 50, 500, 80),
+                content="Cong Hoa Xa Hoi Chu Nghia Viet Nam",
+                metadata={
+                    "font_name": "Calibri",
+                    "font_size_pt": 14,
+                    "bold": True,
+                    "alignment": "center",
+                },
+            )
+            return PageLayout(page_index=0, width=595, height=842, elements=[elem])
+        else:
+            table_res = TableResult(
+                rows=[
+                    [TableCell(row=0, col=0, text="STT"), TableCell(row=0, col=1, text="Hang Hoa")],
+                    [TableCell(row=1, col=0, text="1"), TableCell(row=1, col=1, text="Camera HIKVISION")],
+                ],
+                spans=[],
+                column_widths_pct=[0.2, 0.8],
+            )
+            elem = LayoutElement(
+                page_index=1,
+                element_type="table",
+                bbox=(50, 100, 400, 200),
+                content=table_res,
+            )
+            return PageLayout(page_index=1, width=595, height=842, elements=[elem])
 
-    # Verify Word document contains 2 sections (1 section per page)
-    word_doc = Document(str(out_docx))
+
+
+    with patch.object(engine.reconstructor, "process_page", side_effect=mock_process_page):
+        saved_docx, layouts = engine.process_file_bytes(
+            file_bytes=pdf_bytes,
+            file_kind="pdf",
+            output_docx_path=out_docx_path,
+            dpi=72,
+        )
+
+    # 3. Verify execution and file generation
+    assert saved_docx.exists()
+    assert len(layouts) == 2
+
+    # 4. Verify generated Word document structure and contents
+    word_doc = Document(str(saved_docx))
     assert len(word_doc.sections) == 2
+
+    # Verify paragraph content from page 1 was reconstructed
+    doc_text = " ".join([p.text for p in word_doc.paragraphs])
+    assert "Cong Hoa Xa Hoi Chu Nghia Viet Nam" in doc_text
+
+    # Verify table structure from page 2 was reconstructed
+    assert len(word_doc.tables) >= 1
+    table = word_doc.tables[0]
+    cell_texts = [c.text.strip() for row in table.rows for c in row.cells]
+    assert "STT" in cell_texts
+    assert "Camera HIKVISION" in cell_texts
+
 

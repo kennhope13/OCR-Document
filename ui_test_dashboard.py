@@ -14,10 +14,10 @@ import fitz
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
-from pipeline.deskew import ImageDeskewer
 from pipeline.adaptive_table_extractor import AdaptiveTableExtractor, TableResult
 from pipeline.document_reconstructor import DocumentReconstructor, PageLayout, LayoutElement
 from pipeline.docx_builder import DocxBuilder
+from pipeline.unified_engine import UnifiedDocumentEngine
 from ie.correction.commodity_normalizer import CommodityTokenNormalizer
 
 from pipeline.language_detector import FastLanguageDetector
@@ -64,11 +64,8 @@ st.markdown("""
 
 @st.cache_resource
 def get_pipeline():
-    deskewer = ImageDeskewer(min_angle=1.2, max_angle=20.0, min_lines=8)
-    reconstructor_en = DocumentReconstructor(lang="en")
-    reconstructor_vi = DocumentReconstructor(lang="vi")
-    lang_detector = FastLanguageDetector()
-    docx_builder = DocxBuilder()
+    engine_en = UnifiedDocumentEngine(lang="en")
+    engine_vi = UnifiedDocumentEngine(lang="vi")
     normalizer = CommodityTokenNormalizer(master_sku_dict={
         "DS-DN46C2MB": "DS-DN46C2M/B",
         "DS-2CD2T23G2-41": "DS-2CD2T23G2-4I",
@@ -76,10 +73,11 @@ def get_pipeline():
         "DS-CE76HOT-ITMFS": "DS-2CE76H0T-ITMFS",
         "DS-K4T108": "DS-K4T108"
     })
-    return deskewer, reconstructor_en, reconstructor_vi, lang_detector, docx_builder, normalizer
+    return engine_en, engine_vi, normalizer
 
 
-deskewer, reconstructor_en, reconstructor_vi, lang_detector, docx_builder, normalizer = get_pipeline()
+engine_en, engine_vi, normalizer = get_pipeline()
+
 
 # ==============================================================================
 # HEADER
@@ -220,7 +218,7 @@ if start_process:
     # 1.1 Nhận diện ngôn ngữ tự động nếu chọn Auto-Detect
     if "Auto Detect" in lang_choice:
         status_text.text("Đang nhận diện ngôn ngữ tài liệu (Tiếng Việt hay Tiếng Anh)...")
-        detected_lang, conf, details = lang_detector.detect_image_language(images_to_process[0])
+        detected_lang, conf, details = engine_vi.lang_detector.detect_image_language(images_to_process[0])
         effective_lang = detected_lang
         st.info(f"🌐 **Ngôn ngữ nhận diện được:** `{'Tiếng Việt (vi)' if effective_lang == 'vi' else 'Tiếng Anh (en)'}` (Độ tin cậy: {conf*100:.1f}%)")
     elif "Tiếng Việt" in lang_choice:
@@ -228,32 +226,35 @@ if start_process:
     else:
         effective_lang = "en"
 
-    active_reconstructor = reconstructor_vi if effective_lang == "vi" else reconstructor_en
+    active_engine = engine_vi if effective_lang == "vi" else engine_en
 
     progress_bar.progress(35)
     status_text.text(f"Đã chuẩn bị {len(images_to_process)} trang ảnh. Bắt đầu phân tích layout và OCR ({effective_lang.upper()})...")
 
-    # 2. Xử lý từng trang qua Pipeline
-    all_pages: List[PageLayout] = []
+    # 2. Xử lý từng trang qua UnifiedDocumentEngine
+    def red_filter_transform(p_idx: int, img_bgr: np.ndarray) -> np.ndarray:
+        if apply_red_filter and p_idx == 0 and effective_lang == "en":
+            b, g, r = cv2.split(img_bgr)
+            return cv2.cvtColor(r, cv2.COLOR_GRAY2BGR)
+        return img_bgr
+
+    # Thu thập layout trang thông qua engine
     extracted_items_for_audit: List[Dict[str, Any]] = []
 
-    for idx, page_img in enumerate(images_to_process):
-        status_text.text(f"Đang xử lý Trang {idx+1}/{len(images_to_process)} ({effective_lang.upper()})...")
-        
-        # Xử lý ảnh trang (DocumentReconstructor.process_page đã tự động thực hiện deskew nội bộ)
-        work_img = page_img
+    def on_page_done(curr: int, total: int):
+        progress_bar.progress(30 + int(50 * (curr / total)))
+        status_text.text(f"Đã xử lý xong Trang {curr}/{total} ({effective_lang.upper()})...")
 
-        # Khử màu con dấu đỏ nếu bật
-        if apply_red_filter and idx == 0 and effective_lang == "en":
-            b, g, r = cv2.split(work_img)
-            # Dùng kênh Red làm xám để hòa tan mực đỏ (chỉ với tài liệu CQ/CO)
-            work_img = cv2.cvtColor(r, cv2.COLOR_GRAY2BGR)
+    all_pages = active_engine.process_to_layouts(
+        file_bytes=file_bytes,
+        file_kind="pdf" if file_type == "pdf" else "image",
+        dpi=selected_dpi,
+        page_transform_fn=red_filter_transform,
+        progress_callback=on_page_done,
+    )
 
-        layout = active_reconstructor.process_page(work_img, page_index=idx, dpi=selected_dpi)
-        all_pages.append(layout)
-
-
-        # Thu thập các dòng hàng hóa cho bảng kiểm toán / Excel / JSON
+    # Thu thập các dòng hàng hóa cho bảng kiểm toán / Excel / JSON từ all_pages
+    for layout in all_pages:
         for elem in layout.elements:
             if elem.element_type == "table":
                 t_res: TableResult = elem.content
@@ -276,8 +277,6 @@ if start_process:
                             "raw_ocr": raw_str
                         })
 
-        progress_bar.progress(30 + int(50 * ((idx + 1) / len(images_to_process))))
-
     progress_bar.progress(85)
     status_text.text("Đang đóng gói và kết xuất định dạng tệp đầu ra...")
 
@@ -293,7 +292,7 @@ if start_process:
 
     if output_format.startswith("DOCX - Tái tạo văn bản gốc"):
         out_path = out_dir / f"{base_name}_reconstructed.docx"
-        docx_builder.build_from_pages(all_pages, out_path)
+        active_engine.docx_builder.build_from_pages(all_pages, out_path)
         with open(out_path, "rb") as f:
             output_bytes = f.read()
         out_mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -306,7 +305,8 @@ if start_process:
             "doc_ref": f"{base_name} / HIKNHA0524-03",
             "co_no": "24C3301M3571/00912 (CCPIT)"
         }
-        docx_builder.build_customs_reconciliation_document(meta, extracted_items_for_audit, out_path)
+        active_engine.docx_builder.build_customs_reconciliation_document(meta, extracted_items_for_audit, out_path)
+
         with open(out_path, "rb") as f:
             output_bytes = f.read()
         out_mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"

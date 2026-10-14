@@ -11,8 +11,9 @@ import io
 import os
 import uuid
 import logging
+import threading
 from pathlib import Path
-from typing import List, Tuple, Optional, Union
+from typing import List, Tuple, Optional, Union, Callable
 
 import cv2
 import numpy as np
@@ -53,6 +54,9 @@ class UnifiedDocumentEngine:
         self.artifacts_dir.mkdir(parents=True, exist_ok=True)
         self.max_pdf_pages = max_pdf_pages
         self.max_image_pixels = max_image_pixels
+
+        # Thread safety lock for underlying inference calls (e.g. PaddleOCR)
+        self._inference_lock = threading.Lock()
 
         # Lazy-loaded / persistent pipeline components
         self._reconstructor: Optional[DocumentReconstructor] = None
@@ -143,12 +147,67 @@ class UnifiedDocumentEngine:
         except Exception as e:
             raise SecurityValidationError(f"Failed to decode image: {e}")
 
+    def process_to_layouts(
+        self,
+        file_bytes: bytes,
+        file_kind: str,
+        dpi: int = 150,
+        page_transform_fn: Optional[Callable[[int, np.ndarray], np.ndarray]] = None,
+        progress_callback: Optional[Callable[[int, int], None]] = None,
+    ) -> List[PageLayout]:
+        """Process file bytes to a list of PageLayout objects.
+        
+        Shared across API and Streamlit Dashboard. Allows optional per-page image
+        transformation (e.g. red seal filter) and progress tracking.
+        """
+        page_layouts: List[PageLayout] = []
+
+        if file_kind == "pdf":
+            # Extract pages sequentially
+            # Count total pages for progress callback if provided
+            total_pages = None
+            try:
+                temp_doc = fitz.open(stream=file_bytes, filetype="pdf")
+                total_pages = len(temp_doc)
+                temp_doc.close()
+            except Exception:
+                pass
+
+            for page_idx, img_bgr in self.iter_pdf_pages(file_bytes, dpi=dpi):
+                work_img = img_bgr
+                if page_transform_fn is not None:
+                    work_img = page_transform_fn(page_idx, work_img)
+
+                with self._inference_lock:
+                    layout = self.reconstructor.process_page(work_img, page_index=page_idx, dpi=dpi)
+                page_layouts.append(layout)
+                if progress_callback and total_pages:
+                    progress_callback(page_idx + 1, total_pages)
+                del img_bgr
+        elif file_kind == "image":
+            img_bgr = self.decode_image_bytes(file_bytes)
+            work_img = img_bgr
+            if page_transform_fn is not None:
+                work_img = page_transform_fn(0, work_img)
+
+            with self._inference_lock:
+                layout = self.reconstructor.process_page(work_img, page_index=0, dpi=dpi)
+            page_layouts.append(layout)
+            if progress_callback:
+                progress_callback(1, 1)
+            del img_bgr
+        else:
+            raise SecurityValidationError(f"Unsupported file kind: {file_kind}")
+
+        return page_layouts
+
     def process_file_bytes(
         self,
         file_bytes: bytes,
         file_kind: str,
         output_docx_path: Union[str, Path],
         dpi: int = 150,
+        page_transform_fn: Optional[Callable[[int, np.ndarray], np.ndarray]] = None,
     ) -> Tuple[Path, List[PageLayout]]:
         """Process image or PDF bytes through reconstruction and build a multi-page DOCX.
         
@@ -159,22 +218,15 @@ class UnifiedDocumentEngine:
         output_path = Path(output_docx_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        page_layouts: List[PageLayout] = []
-
-        if file_kind == "pdf":
-            for page_idx, img_bgr in self.iter_pdf_pages(file_bytes, dpi=dpi):
-                layout = self.reconstructor.process_page(img_bgr, page_index=page_idx, dpi=dpi)
-                page_layouts.append(layout)
-                del img_bgr
-        elif file_kind == "image":
-            img_bgr = self.decode_image_bytes(file_bytes)
-            layout = self.reconstructor.process_page(img_bgr, page_index=0, dpi=dpi)
-            page_layouts.append(layout)
-            del img_bgr
-        else:
-            raise SecurityValidationError(f"Unsupported file kind: {file_kind}")
+        page_layouts = self.process_to_layouts(
+            file_bytes=file_bytes,
+            file_kind=file_kind,
+            dpi=dpi,
+            page_transform_fn=page_transform_fn,
+        )
 
         # Build and save single unified document using DocxBuilder.build_from_pages
         saved_path = self.docx_builder.build_from_pages(page_layouts, output_path=output_path)
         return Path(saved_path), page_layouts
+
 
