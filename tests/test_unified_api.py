@@ -237,5 +237,83 @@ def test_dashboard_first_page_cached_flow(tmp_path):
     assert np.array_equal(passed_first_img, first_page)
 
 
+def test_unified_engine_validation_and_edge_cases(tmp_path):
+    """Verifies edge cases & boundary validations:
+    1. Corrupted PDF bytes reject with SecurityValidationError
+    2. Exceeding max_pdf_pages rejects with SecurityValidationError
+    3. Invalid start_page bounds reject with SecurityValidationError
+    4. 1-page PDF with cached_first_page executes cleanly with 0 additional rasterizations
+    """
+    import fitz
+    from unittest.mock import MagicMock
+    from pipeline.unified_engine import UnifiedDocumentEngine, SecurityValidationError
+
+    mock_reconstructor = MagicMock()
+    mock_reconstructor.process_page.return_value = PageLayout(page_index=0, width=595, height=842, elements=[])
+
+    engine = UnifiedDocumentEngine(
+        artifacts_dir=str(tmp_path / "artifacts"),
+        max_pdf_pages=3,
+        reconstructor=mock_reconstructor,
+    )
+
+    # 1. Corrupted PDF bytes
+    corrupted_pdf = b"%PDF-1.4 totally corrupted binary payload"
+    with pytest.raises(SecurityValidationError, match="Invalid or corrupted PDF file"):
+        engine.process_to_layouts(corrupted_pdf, file_kind="pdf", cached_first_page=np.zeros((10, 10, 3), dtype=np.uint8))
+
+    # 2. Exceeding max_pdf_pages (limit is 3, create 4 pages)
+    doc_large = fitz.open()
+    for _ in range(4):
+        doc_large.new_page(width=595, height=842)
+    large_pdf_bytes = doc_large.tobytes()
+    doc_large.close()
+
+    with pytest.raises(SecurityValidationError, match="PDF exceeds page limit"):
+        engine.process_to_layouts(large_pdf_bytes, file_kind="pdf")
+
+    # 3. Invalid start_page bounds in iter_pdf_pages
+    doc_2p = fitz.open()
+    doc_2p.new_page(width=595, height=842)
+    doc_2p.new_page(width=595, height=842)
+    pdf_2p_bytes = doc_2p.tobytes()
+    doc_2p.close()
+
+    with pytest.raises(SecurityValidationError, match="Invalid start_page"):
+        list(engine.iter_pdf_pages(pdf_2p_bytes, start_page=5))
+
+    with pytest.raises(SecurityValidationError, match="Invalid start_page"):
+        list(engine.iter_pdf_pages(pdf_2p_bytes, start_page=-1))
+
+    # 4. 1-page PDF with cached_first_page
+    doc_1p = fitz.open()
+    doc_1p.new_page(width=595, height=842)
+    pdf_1p_bytes = doc_1p.tobytes()
+    doc_1p.close()
+
+    dummy_cache = np.zeros((100, 100, 3), dtype=np.uint8)
+
+    orig_get_pixmap = fitz.Page.get_pixmap
+    pixmap_calls = 0
+
+    def counting_get_pixmap(self, *args, **kwargs):
+        nonlocal pixmap_calls
+        pixmap_calls += 1
+        return orig_get_pixmap(self, *args, **kwargs)
+
+    with patch.object(fitz.Page, "get_pixmap", counting_get_pixmap):
+        layouts = engine.process_to_layouts(
+            pdf_1p_bytes,
+            file_kind="pdf",
+            dpi=72,
+            cached_first_page=dummy_cache,
+        )
+        # 1-page PDF: page 0 was cached, remaining pages loop (start_page=1 < 1) does not run, so 0 pixmap calls!
+        assert pixmap_calls == 0
+        assert len(layouts) == 1
+        assert mock_reconstructor.process_page.call_count == 1
+
+
+
 
 
