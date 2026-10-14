@@ -118,11 +118,12 @@ class UnifiedDocumentEngine:
         del first_page
         return lang, conf, details
 
-    def iter_pdf_pages(self, pdf_bytes: bytes, dpi: int = 150):
+    def iter_pdf_pages(self, pdf_bytes: bytes, dpi: int = 150, start_page: int = 0):
         """Iteratively yield BGR numpy image arrays from PDF bytes.
         
         Processes pages one-by-one to prevent high memory consumption (OOM)
-        on multi-page documents.
+        on multi-page documents. If start_page > 0, skips earlier pages without
+        rasterizing them.
         """
         try:
             doc = fitz.open(stream=pdf_bytes, filetype="pdf")
@@ -141,7 +142,7 @@ class UnifiedDocumentEngine:
             zoom = dpi / 72.0
             matrix = fitz.Matrix(zoom, zoom)
 
-            for page_idx in range(total_pages):
+            for page_idx in range(start_page, total_pages):
                 page = doc[page_idx]
                 pix = page.get_pixmap(matrix=matrix, alpha=False)
                 total_px = pix.width * pix.height
@@ -194,14 +195,13 @@ class UnifiedDocumentEngine:
         
         Shared across API and Streamlit Dashboard. Allows optional per-page image
         transformation (e.g. red seal filter) and progress tracking.
-        If cached_first_page is provided, page 0 uses this image directly rather than
-        re-rasterizing or re-decoding.
+        If cached_first_page is provided, page 0 uses this image directly without
+        calling get_pixmap on page 0 again.
         """
         page_layouts: List[PageLayout] = []
 
         if file_kind == "pdf":
             # Extract pages sequentially
-            # Count total pages for progress callback if provided
             total_pages = None
             try:
                 temp_doc = fitz.open(stream=file_bytes, filetype="pdf")
@@ -210,12 +210,23 @@ class UnifiedDocumentEngine:
             except Exception:
                 pass
 
-            for page_idx, img_bgr in self.iter_pdf_pages(file_bytes, dpi=dpi):
-                if page_idx == 0 and cached_first_page is not None:
-                    work_img = cached_first_page
-                else:
-                    work_img = img_bgr
+            # If page 0 is already rasterized in cached_first_page, process it directly
+            if cached_first_page is not None:
+                work_img = cached_first_page
+                if page_transform_fn is not None:
+                    work_img = page_transform_fn(0, work_img)
+                with self._inference_lock:
+                    layout0 = self.reconstructor.process_page(work_img, page_index=0, dpi=dpi)
+                page_layouts.append(layout0)
+                if progress_callback and total_pages:
+                    progress_callback(1, total_pages)
+                start_page = 1
+            else:
+                start_page = 0
 
+            # Iteratively stream the remaining pages (starting at start_page)
+            for page_idx, img_bgr in self.iter_pdf_pages(file_bytes, dpi=dpi, start_page=start_page):
+                work_img = img_bgr
                 if page_transform_fn is not None:
                     work_img = page_transform_fn(page_idx, work_img)
 
@@ -244,6 +255,7 @@ class UnifiedDocumentEngine:
             raise SecurityValidationError(f"Unsupported file kind: {file_kind}")
 
         return page_layouts
+
 
     def process_file_bytes(
         self,

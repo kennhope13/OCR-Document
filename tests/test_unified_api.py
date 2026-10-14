@@ -204,25 +204,38 @@ def test_dashboard_first_page_cached_flow(tmp_path):
         lang_detector=mock_lang_detector,
     )
 
-    # 1. Detect language and get cached first page
-    lang, conf, details, first_page = engine.detect_file_language(
-        pdf_bytes, file_kind="pdf", dpi=72, return_first_page=True
-    )
-    assert lang == "vi"
-    assert isinstance(first_page, np.ndarray)
+    # 1. Detect language and get cached first page, monitoring get_pixmap calls
+    orig_get_pixmap = fitz.Page.get_pixmap
+    pixmap_calls = 0
 
-    # 2. Process to layouts passing cached first page
-    layouts = engine.process_to_layouts(
-        file_bytes=pdf_bytes,
-        file_kind="pdf",
-        dpi=72,
-        cached_first_page=first_page,
-    )
+    def counting_get_pixmap(self, *args, **kwargs):
+        nonlocal pixmap_calls
+        pixmap_calls += 1
+        return orig_get_pixmap(self, *args, **kwargs)
+
+    with patch.object(fitz.Page, "get_pixmap", counting_get_pixmap):
+        lang, conf, details, first_page = engine.detect_file_language(
+            pdf_bytes, file_kind="pdf", dpi=72, return_first_page=True
+        )
+        # Exactly 1 pixmap call so far (page 0)
+        assert pixmap_calls == 1
+
+        # 2. Process to layouts passing cached first page
+        layouts = engine.process_to_layouts(
+            file_bytes=pdf_bytes,
+            file_kind="pdf",
+            dpi=72,
+            cached_first_page=first_page,
+        )
+        # Exactly 2 total pixmap calls for the entire 2-page PDF (page 0 in detect, page 1 in process)
+        assert pixmap_calls == 2
+
     assert len(layouts) == 2
     assert mock_reconstructor.process_page.call_count == 2
     # Verify the first page passed to process_page was exactly our cached array
     passed_first_img = mock_reconstructor.process_page.call_args_list[0][0][0]
     assert np.array_equal(passed_first_img, first_page)
+
 
 
 
