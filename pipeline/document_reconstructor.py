@@ -47,22 +47,19 @@ class DocumentReconstructor:
                 pass
 
         if lang == "vi":
-            import paddleocr
-            latin_dict_path = Path(paddleocr.__file__).parent / "ppocr" / "utils" / "dict" / "latin_dict.txt"
-            latin_rec_dir = Path.home() / ".paddleocr" / "whl" / "rec" / "latin" / "latin_PP-OCRv3_rec_infer"
-            pp_kwargs = {"table": True, "ocr": True, "show_log": False}
-            if latin_dict_path.exists():
-                pp_kwargs["rec_char_dict_path"] = str(latin_dict_path)
-            if latin_rec_dir.exists():
-                pp_kwargs["rec_model_dir"] = str(latin_rec_dir)
-            self.layout_engine = PPStructure(**pp_kwargs)
+            from paddleocr import PaddleOCR
+            vi_ocr = PaddleOCR(use_angle_cls=False, lang='vi', show_log=False)
+            self.layout_engine = PPStructure(
+                table=True,
+                ocr=True,
+                show_log=False,
+                rec_model_dir=vi_ocr.args.rec_model_dir,
+                rec_char_dict_path=vi_ocr.args.rec_char_dict_path,
+            )
+            self.table_extractor = AdaptiveTableExtractor(ocr_engine=vi_ocr, vietocr_predictor=self.vietocr_predictor)
         else:
             self.layout_engine = PPStructure(table=True, ocr=True, show_log=False)
-
-        self.table_extractor = AdaptiveTableExtractor(vietocr_predictor=self.vietocr_predictor)
-        if lang == "vi":
-            from paddleocr import PaddleOCR
-            self.table_extractor.ocr = PaddleOCR(use_angle_cls=False, lang='vi', show_log=False)
+            self.table_extractor = AdaptiveTableExtractor(vietocr_predictor=self.vietocr_predictor)
         self.deskewer = ImageDeskewer(min_angle=1.2, max_angle=20.0, min_lines=8)
 
     def _detect_red_seals(self, page_img_bgr: np.ndarray, page_index: int, covered_boxes: List[Tuple[int, int, int, int]]) -> List[LayoutElement]:

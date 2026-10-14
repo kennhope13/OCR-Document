@@ -262,7 +262,7 @@ def evaluate_run(
         "overall_wer_normalized": (
             round(total_word_edits / total_ref_words, 4) if total_ref_words > 0 else 0.0
         ),
-        "key_entities_exact_match_rate": (
+        "entity_string_hit_rate": (
             round(all_entities_match / all_entities_count, 4) if all_entities_count > 0 else 0.0
         ),
         "table_cell_exact_match_rate": (
@@ -291,6 +291,9 @@ def run_benchmark():
         artifacts_dir="artifacts/benchmark_runs",
     )
 
+    rec_model = getattr(engine.reconstructor.layout_engine.text_system.text_recognizer, "character_model_dir", "latin_PP-OCRv3_rec_infer")
+    rec_dict_len = len(engine.reconstructor.layout_engine.text_system.text_recognizer.postprocess_op.character)
+
     print("[2/3] Running Evaluation: Config A (Raw: enable_deskew=False, rasterize_dpi=200)...")
     res_raw = evaluate_run(engine, pdf_bytes, gt_data, enable_deskew=False, dpi=200)
 
@@ -303,12 +306,14 @@ def run_benchmark():
             "rasterize_dpi": 200,
             "engine": "UnifiedDocumentEngine",
             "lang": "vi",
+            "rec_model": str(rec_model),
+            "rec_dictionary_length": rec_dict_len,
         },
         "config_A_raw": res_raw,
         "config_B_deskewed": res_deskew,
     }
 
-    out_report_path = Path("artifacts/benchmark_runs/holdout_baseline_report.json")
+    out_report_path = Path("data/artifacts/benchmark_runs/holdout_baseline_report.json")
     out_report_path.parent.mkdir(parents=True, exist_ok=True)
     with open(out_report_path, "w", encoding="utf-8") as f:
         json.dump(report, f, ensure_ascii=False, indent=2)
@@ -319,7 +324,7 @@ def run_benchmark():
     print("-" * 75)
     print(f"{'Overall CER (Normalized)':<35} | {res_raw['overall']['overall_cer_normalized']:<16.4f} | {res_deskew['overall']['overall_cer_normalized']:<16.4f}")
     print(f"{'Overall WER (Normalized)':<35} | {res_raw['overall']['overall_wer_normalized']:<16.4f} | {res_deskew['overall']['overall_wer_normalized']:<16.4f}")
-    print(f"{'Key Entities Exact Match Rate':<35} | {res_raw['overall']['key_entities_exact_match_rate']:<16.4f} | {res_deskew['overall']['key_entities_exact_match_rate']:<16.4f}")
+    print(f"{'Entity String Hit Rate':<35} | {res_raw['overall']['entity_string_hit_rate']:<16.4f} | {res_deskew['overall']['entity_string_hit_rate']:<16.4f}")
     print(f"{'Table Cell Exact Match Rate':<35} | {res_raw['overall']['table_cell_exact_match_rate']:<16.4f} | {res_deskew['overall']['table_cell_exact_match_rate']:<16.4f}")
 
 
