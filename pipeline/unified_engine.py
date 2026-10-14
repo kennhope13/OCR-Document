@@ -139,6 +139,11 @@ class UnifiedDocumentEngine:
                     f"PDF exceeds page limit ({total_pages} > {self.max_pdf_pages} pages)."
                 )
 
+            if not (0 <= start_page <= total_pages):
+                raise SecurityValidationError(
+                    f"Invalid start_page {start_page} for document with {total_pages} pages."
+                )
+
             zoom = dpi / 72.0
             matrix = fitz.Matrix(zoom, zoom)
 
@@ -201,16 +206,24 @@ class UnifiedDocumentEngine:
         page_layouts: List[PageLayout] = []
 
         if file_kind == "pdf":
-            # Extract pages sequentially
-            total_pages = None
+            # 1. Strictly validate PDF integrity and limits upfront
             try:
                 temp_doc = fitz.open(stream=file_bytes, filetype="pdf")
-                total_pages = len(temp_doc)
-                temp_doc.close()
-            except Exception:
-                pass
+            except Exception as e:
+                raise SecurityValidationError(f"Invalid or corrupted PDF file: {e}")
 
-            # If page 0 is already rasterized in cached_first_page, process it directly
+            try:
+                total_pages = len(temp_doc)
+                if total_pages == 0:
+                    raise SecurityValidationError("PDF file contains no pages.")
+                if total_pages > self.max_pdf_pages:
+                    raise SecurityValidationError(
+                        f"PDF exceeds page limit ({total_pages} > {self.max_pdf_pages} pages)."
+                    )
+            finally:
+                temp_doc.close()
+
+            # 2. If page 0 is already rasterized in cached_first_page, process it directly
             if cached_first_page is not None:
                 work_img = cached_first_page
                 if page_transform_fn is not None:
@@ -218,25 +231,27 @@ class UnifiedDocumentEngine:
                 with self._inference_lock:
                     layout0 = self.reconstructor.process_page(work_img, page_index=0, dpi=dpi)
                 page_layouts.append(layout0)
-                if progress_callback and total_pages:
+                if progress_callback:
                     progress_callback(1, total_pages)
                 start_page = 1
             else:
                 start_page = 0
 
-            # Iteratively stream the remaining pages (starting at start_page)
-            for page_idx, img_bgr in self.iter_pdf_pages(file_bytes, dpi=dpi, start_page=start_page):
-                work_img = img_bgr
-                if page_transform_fn is not None:
-                    work_img = page_transform_fn(page_idx, work_img)
+            # 3. Iteratively stream the remaining pages (starting at start_page)
+            if start_page < total_pages:
+                for page_idx, img_bgr in self.iter_pdf_pages(file_bytes, dpi=dpi, start_page=start_page):
+                    work_img = img_bgr
+                    if page_transform_fn is not None:
+                        work_img = page_transform_fn(page_idx, work_img)
 
-                with self._inference_lock:
-                    layout = self.reconstructor.process_page(work_img, page_index=page_idx, dpi=dpi)
-                page_layouts.append(layout)
-                if progress_callback and total_pages:
-                    progress_callback(page_idx + 1, total_pages)
-                del img_bgr
+                    with self._inference_lock:
+                        layout = self.reconstructor.process_page(work_img, page_index=page_idx, dpi=dpi)
+                    page_layouts.append(layout)
+                    if progress_callback:
+                        progress_callback(page_idx + 1, total_pages)
+                    del img_bgr
         elif file_kind == "image":
+
             if cached_first_page is not None:
                 img_bgr = cached_first_page
             else:
