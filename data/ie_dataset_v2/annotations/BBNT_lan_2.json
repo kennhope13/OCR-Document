@@ -1,0 +1,79 @@
+{
+  "document_id": "BBNT_lan_2",
+  "source_file": "BBNT lần 2.pdf",
+  "document_type": "acceptance_report",
+  "total_pages": 2,
+  "pages": {
+    "1": {
+      "full_text": "CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM\nĐộc lập - Tự do - Hạnh phúc\n\nBIÊN BẢN NGHIỆM THU VẬT TƯ THIẾT BỊ - LẦN 2\n\n- Căn cứ Hợp đồng số 2809 / HĐ- TITSMART-PHUOCTIEN ngày 28 tháng 09 năm 2026 ký kết giữa Công ty TNHH TITSMART và Công ty TNHH Công nghệ Phước Tiến.\n- Căn cứ Biên bản bàn giao kiêm Phiếu xuất kho ngày     tháng     năm 2026;\nHôm nay, ngày     tháng     năm 2026, chúng tôi gồm:\nI. Thành phần:\n1. Đại diện Bên bán: CÔNG TY TNHH TM DV KỸ THUẬT ĐẠI PHÚC\n- Địa chỉ: Số 175/87/23 Đường số 2, Tổ 9, KP1, Phường Tăng Nhơn Phú ,TP. HCM.\n- Đại diện: Trần Việt Cường          Chức vụ: Giám đốc.\n2. Đại diện Bên mua: CÔNG TY TNHH CÔNG NGHỆ PHƯỚC TIẾN\n- Địa chỉ: Số 134/13A Trần Bá Giao, Phường An Nhơn, TP.HCM\n- Đại diện: Ông Nguyễn Tiến Dũng          Chức vụ: Giám đốc\nII. Ngày nghiệm thu: Ngày     tháng     năm 2026\nIII. Địa điểm nghiệm thu: Tại kho Công ty TNHH Công nghệ Phước Tiến\nIV. Ngày nghiệm thu: Ngày     tháng     năm 2026\nV. Nội dung nghiệm thu:\n- Nghiệm thu hàng hóa theo Hợp đồng số 2809 / HĐ- TITSMART-PHUOCTIEN ngày 28 tháng 09 năm 2026\n- Hai bên tiến hành nghiệm thu hàng hóa (kèm theo Phụ lục vật tư thiết bị).\nVI. Tài liệu kèm theo hàng hóa:\nHóa đơn số     ngày     /     / 2026, Ký hiệu: 1C26TTS, Với trị giá 1.054.620.000 VNĐ\nPHỤ LỤC VẬT TƯ THIẾT BỊ\nĐẠI DIỆN BÊN MUA\nGiám đốc\nNguyễn Tiến Dũng\nĐẠI DIỆN BÊN BÁN\nGiám đốc\nTrần Việt Cường",
+      "key_entities": {
+        "contract_number": "2809 / HĐ- TITSMART-PHUOCTIEN",
+        "contract_date": "ngày 28 tháng 09 năm 2026",
+        "seller_company": "CÔNG TY TNHH TM DV KỸ THUẬT ĐẠI PHÚC",
+        "seller_address": "Số 175/87/23 Đường số 2, Tổ 9, KP1, Phường Tăng Nhơn Phú ,TP. HCM.",
+        "seller_representative": "Trần Việt Cường",
+        "buyer_company": "CÔNG TY TNHH CÔNG NGHỆ PHƯỚC TIẾN",
+        "buyer_address": "Số 134/13A Trần Bá Giao, Phường An Nhơn, TP.HCM",
+        "buyer_representative": "Nguyễn Tiến Dũng",
+        "invoice_serial": "1C26TTS",
+        "invoice_total_amount": "1.054.620.000 VNĐ"
+      },
+      "table": {
+        "headers": [
+          "STT",
+          "Tên hàng qui cách hàng hóa",
+          "Nhà sản xuất/ Xuất xứ/ Cấu hình, tính năng kỹ thuật cơ bản",
+          "ĐVT",
+          "Số lượng Theo Hợp đồng",
+          "Số lượng Đã bàn giao Lần 1",
+          "Số lượng Theo thực tế",
+          "Ghi chú"
+        ],
+        "rows": [
+          [
+            "02",
+            "Máy vi tính xách tay",
+            "ASUS ExpertBook B1503CVA, Core 5 120U, RAM 16GB, SSD 512GB, màn hình 15,6inch FHD IPS, Windows 11 bản quyền. Bảo hành 36 tháng.",
+            "Bộ",
+            "41",
+            "06",
+            "35",
+            ""
+          ]
+        ]
+      }
+    },
+    "2": {
+      "full_text": "PHỤ LỤC DANH MỤC THIẾT BỊ BÀN GIAO\n(Kèm theo biên bản bàn giao ngày     tháng     năm 2026)",
+      "key_entities": {
+        "product_model": "Asus B1503CVA",
+        "quantity": "35",
+        "unit": "Bộ"
+      },
+      "table": {
+        "headers": [
+          "STT",
+          "Danh mục hàng hóa",
+          "Mã hàng",
+          "Cấu hình, tính năng kỹ thuật cơ bản",
+          "ĐVT",
+          "Số lượng",
+          "Số Seri Number",
+          "Ghi chú"
+        ],
+        "rows": [
+          [
+            "01",
+            "Máy vi tính xách tay",
+            "Asus B1503CVA",
+            "ASUS ExpertBook B1503CVA, Core 5 120U, RAM 16GB, SSD 512GB, màn hình 15,6 inch FHD IPS, Windows 11 bản quyền. Bảo hành 36 tháng.",
+            "Bộ",
+            "35",
+            "",
+            ""
+          ]
+        ]
+      }
+    }
+  }
+}

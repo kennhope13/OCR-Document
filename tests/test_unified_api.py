@@ -138,7 +138,7 @@ def test_pipeline_integration_real_pdf_to_docx(tmp_path):
     # 2. Mock reconstructor with simulated process_page to avoid initializing PaddleOCR
     mock_reconstructor = MagicMock()
 
-    def mock_process_page(img_bgr, page_index=0, dpi=150):
+    def mock_process_page(img_bgr, page_index=0, dpi=150, *args, **kwargs):
         if page_index == 0:
             elem = LayoutElement(
                 page_index=0,

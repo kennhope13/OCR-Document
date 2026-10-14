@@ -46,7 +46,19 @@ class DocumentReconstructor:
             except Exception as e:
                 pass
 
-        self.layout_engine = PPStructure(table=True, ocr=True, show_log=False)
+        if lang == "vi":
+            import paddleocr
+            latin_dict_path = Path(paddleocr.__file__).parent / "ppocr" / "utils" / "dict" / "latin_dict.txt"
+            latin_rec_dir = Path.home() / ".paddleocr" / "whl" / "rec" / "latin" / "latin_PP-OCRv3_rec_infer"
+            pp_kwargs = {"table": True, "ocr": True, "show_log": False}
+            if latin_dict_path.exists():
+                pp_kwargs["rec_char_dict_path"] = str(latin_dict_path)
+            if latin_rec_dir.exists():
+                pp_kwargs["rec_model_dir"] = str(latin_rec_dir)
+            self.layout_engine = PPStructure(**pp_kwargs)
+        else:
+            self.layout_engine = PPStructure(table=True, ocr=True, show_log=False)
+
         self.table_extractor = AdaptiveTableExtractor(vietocr_predictor=self.vietocr_predictor)
         if lang == "vi":
             from paddleocr import PaddleOCR
@@ -581,7 +593,7 @@ class DocumentReconstructor:
             warnings=warnings
         )
 
-    def process_page(self, page_img_bgr: np.ndarray, page_index: int, dpi: int = 150) -> PageLayout:
+    def process_page(self, page_img_bgr: np.ndarray, page_index: int, dpi: int = 150, enable_deskew: bool = True) -> PageLayout:
         h, w = page_img_bgr.shape[:2]
 
         # 0. Bỏ qua trang trắng
@@ -595,14 +607,18 @@ class DocumentReconstructor:
             )
 
         # 1. Tiền xử lý Auto-Deskew (ước lượng và hiệu chỉnh góc nghiêng và hướng xoay)
-        deskew_res = self.deskewer.deskew(page_img_bgr)
-        working_img = deskew_res.image
-        h, w = working_img.shape[:2]
         warnings: List[str] = []
-        if deskew_res.is_modified:
-            warnings.append(
-                f"Auto-deskew applied: {deskew_res.applied_angle:.2f}° (conf: {deskew_res.confidence:.2f})"
-            )
+        if enable_deskew:
+            deskew_res = self.deskewer.deskew(page_img_bgr)
+            working_img = deskew_res.image
+            h, w = working_img.shape[:2]
+            if deskew_res.is_modified:
+                warnings.append(
+                    f"Auto-deskew applied: {deskew_res.applied_angle:.2f}° (conf: {deskew_res.confidence:.2f})"
+                )
+        else:
+            working_img = page_img_bgr
+            h, w = working_img.shape[:2]
 
         layout_raw = self.layout_engine(working_img)
 

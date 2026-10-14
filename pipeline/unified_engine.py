@@ -195,6 +195,7 @@ class UnifiedDocumentEngine:
         page_transform_fn: Optional[Callable[[int, np.ndarray], np.ndarray]] = None,
         progress_callback: Optional[Callable[[int, int], None]] = None,
         cached_first_page: Optional[np.ndarray] = None,
+        enable_deskew: bool = True,
     ) -> List[PageLayout]:
         """Process file bytes to a list of PageLayout objects.
         
@@ -229,7 +230,7 @@ class UnifiedDocumentEngine:
                 if page_transform_fn is not None:
                     work_img = page_transform_fn(0, work_img)
                 with self._inference_lock:
-                    layout0 = self.reconstructor.process_page(work_img, page_index=0, dpi=dpi)
+                    layout0 = self.reconstructor.process_page(work_img, page_index=0, dpi=dpi, enable_deskew=enable_deskew)
                 page_layouts.append(layout0)
                 if progress_callback:
                     progress_callback(1, total_pages)
@@ -245,7 +246,7 @@ class UnifiedDocumentEngine:
                         work_img = page_transform_fn(page_idx, work_img)
 
                     with self._inference_lock:
-                        layout = self.reconstructor.process_page(work_img, page_index=page_idx, dpi=dpi)
+                        layout = self.reconstructor.process_page(work_img, page_index=page_idx, dpi=dpi, enable_deskew=enable_deskew)
                     page_layouts.append(layout)
                     if progress_callback:
                         progress_callback(page_idx + 1, total_pages)
@@ -261,7 +262,7 @@ class UnifiedDocumentEngine:
                 work_img = page_transform_fn(0, work_img)
 
             with self._inference_lock:
-                layout = self.reconstructor.process_page(work_img, page_index=0, dpi=dpi)
+                layout = self.reconstructor.process_page(work_img, page_index=0, dpi=dpi, enable_deskew=enable_deskew)
             page_layouts.append(layout)
             if progress_callback:
                 progress_callback(1, 1)
@@ -280,6 +281,7 @@ class UnifiedDocumentEngine:
         dpi: int = 150,
         page_transform_fn: Optional[Callable[[int, np.ndarray], np.ndarray]] = None,
         cached_first_page: Optional[np.ndarray] = None,
+        enable_deskew: bool = True,
     ) -> Tuple[Path, List[PageLayout]]:
         """Process image or PDF bytes through reconstruction and build a multi-page DOCX.
         
@@ -296,6 +298,7 @@ class UnifiedDocumentEngine:
             dpi=dpi,
             page_transform_fn=page_transform_fn,
             cached_first_page=cached_first_page,
+            enable_deskew=enable_deskew,
         )
 
         # Build and save single unified document using DocxBuilder.build_from_pages
