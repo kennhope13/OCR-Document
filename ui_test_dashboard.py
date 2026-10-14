@@ -240,9 +240,8 @@ if start_process:
     for idx, page_img in enumerate(images_to_process):
         status_text.text(f"Đang xử lý Trang {idx+1}/{len(images_to_process)} ({effective_lang.upper()})...")
         
-        # Tiền xử lý Deskew
-        d_res = deskewer.deskew(page_img)
-        work_img = d_res.image
+        # Xử lý ảnh trang (DocumentReconstructor.process_page đã tự động thực hiện deskew nội bộ)
+        work_img = page_img
 
         # Khử màu con dấu đỏ nếu bật
         if apply_red_filter and idx == 0 and effective_lang == "en":
@@ -252,6 +251,7 @@ if start_process:
 
         layout = active_reconstructor.process_page(work_img, page_index=idx, dpi=selected_dpi)
         all_pages.append(layout)
+
 
         # Thu thập các dòng hàng hóa cho bảng kiểm toán / Excel / JSON
         for elem in layout.elements:

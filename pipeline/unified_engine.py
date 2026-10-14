@@ -80,40 +80,49 @@ class UnifiedDocumentEngine:
             self._lang_detector = FastLanguageDetector()
         return self._lang_detector
 
-    def rasterize_pdf_bytes(self, pdf_bytes: bytes, dpi: int = 150) -> List[np.ndarray]:
-        """Convert PDF bytes to a list of BGR numpy image arrays using PyMuPDF (fitz)."""
+    def iter_pdf_pages(self, pdf_bytes: bytes, dpi: int = 150):
+        """Iteratively yield BGR numpy image arrays from PDF bytes.
+        
+        Processes pages one-by-one to prevent high memory consumption (OOM)
+        on multi-page documents.
+        """
         try:
             doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         except Exception as e:
             raise SecurityValidationError(f"Invalid or corrupted PDF file: {e}")
 
-        total_pages = len(doc)
-        if total_pages == 0:
-            raise SecurityValidationError("PDF file contains no pages.")
-        if total_pages > self.max_pdf_pages:
-            raise SecurityValidationError(
-                f"PDF exceeds page limit ({total_pages} > {self.max_pdf_pages} pages)."
-            )
-
-        images = []
-        zoom = dpi / 72.0
-        matrix = fitz.Matrix(zoom, zoom)
-
-        for page_idx in range(total_pages):
-            page = doc[page_idx]
-            pix = page.get_pixmap(matrix=matrix, alpha=False)
-            total_px = pix.width * pix.height
-            if total_px > self.max_image_pixels:
+        try:
+            total_pages = len(doc)
+            if total_pages == 0:
+                raise SecurityValidationError("PDF file contains no pages.")
+            if total_pages > self.max_pdf_pages:
                 raise SecurityValidationError(
-                    f"Page {page_idx + 1} exceeds max allowed pixel size ({total_px} > {self.max_image_pixels})."
+                    f"PDF exceeds page limit ({total_pages} > {self.max_pdf_pages} pages)."
                 )
-            # PyMuPDF samples are RGB; convert directly to BGR for OpenCV / DocumentReconstructor
-            img_rgb = np.frombuffer(pix.samples, dtype=np.uint8).reshape((pix.height, pix.width, 3))
-            img_bgr = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
-            images.append(img_bgr)
 
-        doc.close()
-        return images
+            zoom = dpi / 72.0
+            matrix = fitz.Matrix(zoom, zoom)
+
+            for page_idx in range(total_pages):
+                page = doc[page_idx]
+                pix = page.get_pixmap(matrix=matrix, alpha=False)
+                total_px = pix.width * pix.height
+                if total_px > self.max_image_pixels:
+                    raise SecurityValidationError(
+                        f"Page {page_idx + 1} exceeds max allowed pixel size ({total_px} > {self.max_image_pixels})."
+                    )
+                # PyMuPDF samples are RGB; convert directly to BGR for OpenCV / DocumentReconstructor
+                img_rgb = np.frombuffer(pix.samples, dtype=np.uint8).reshape((pix.height, pix.width, 3))
+                img_bgr = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
+                # Free pixmap explicitly before yielding
+                del pix
+                yield page_idx, img_bgr
+        finally:
+            doc.close()
+
+    def rasterize_pdf_bytes(self, pdf_bytes: bytes, dpi: int = 150) -> List[np.ndarray]:
+        """Convert PDF bytes to a list of BGR numpy image arrays (convenience wrapper)."""
+        return [img for _, img in self.iter_pdf_pages(pdf_bytes, dpi=dpi)]
 
     def decode_image_bytes(self, image_bytes: bytes) -> np.ndarray:
         """Decode raw image bytes to BGR numpy array with decompression bomb protection."""
@@ -143,24 +152,29 @@ class UnifiedDocumentEngine:
     ) -> Tuple[Path, List[PageLayout]]:
         """Process image or PDF bytes through reconstruction and build a multi-page DOCX.
         
+        Streamlines memory consumption by iterating through pages sequentially.
         Note: DocumentReconstructor.process_page already internally performs deskewing,
         so raw rasterized images are passed directly without duplicate deskewing.
         """
         output_path = Path(output_docx_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
+        page_layouts: List[PageLayout] = []
+
         if file_kind == "pdf":
-            page_images = self.rasterize_pdf_bytes(file_bytes, dpi=dpi)
+            for page_idx, img_bgr in self.iter_pdf_pages(file_bytes, dpi=dpi):
+                layout = self.reconstructor.process_page(img_bgr, page_index=page_idx, dpi=dpi)
+                page_layouts.append(layout)
+                del img_bgr
         elif file_kind == "image":
-            page_images = [self.decode_image_bytes(file_bytes)]
+            img_bgr = self.decode_image_bytes(file_bytes)
+            layout = self.reconstructor.process_page(img_bgr, page_index=0, dpi=dpi)
+            page_layouts.append(layout)
+            del img_bgr
         else:
             raise SecurityValidationError(f"Unsupported file kind: {file_kind}")
-
-        page_layouts: List[PageLayout] = []
-        for idx, img_bgr in enumerate(page_images):
-            layout = self.reconstructor.process_page(img_bgr, page_index=idx, dpi=dpi)
-            page_layouts.append(layout)
 
         # Build and save single unified document using DocxBuilder.build_from_pages
         saved_path = self.docx_builder.build_from_pages(page_layouts, output_path=output_path)
         return Path(saved_path), page_layouts
+

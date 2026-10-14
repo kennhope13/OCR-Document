@@ -75,9 +75,9 @@ def convert_ocr():
         if not is_supported_file(raw_file_name, file_bytes):
             return jsonify({"error": "Unsupported file format."}), 400
 
-        # Generate a safe, collision-free server-side filename
+        # Generate a safe, collision-free server-side filename using full UUID hex
         safe_base_name = secure_filename(Path(raw_file_name).stem) or "document"
-        unique_file_id = f"{safe_base_name}_{uuid.uuid4().hex[:8]}.docx"
+        unique_file_id = f"{safe_base_name}_{uuid.uuid4().hex}.docx"
         target_docx_path = LOCAL_OUTPUT_DIR / unique_file_id
 
         # Execute unified processing pipeline
@@ -111,10 +111,12 @@ def convert_ocr():
     except SecurityValidationError as sve:
         return jsonify({"error": f"Security validation failed: {str(sve)}"}), 400
     except DocumentProcessingError as dpe:
-        return jsonify({"error": f"Document processing failed: {str(dpe)}"}), 500
+        logger.error(f"Document processing error: {dpe}")
+        return jsonify({"error": "Document processing failed. Please check your document format or quality."}), 500
     except Exception as e:
-        logger.exception("Unexpected error in /convert")
-        return jsonify({"error": str(e)}), 500
+        logger.exception("Unexpected internal error in /convert")
+        return jsonify({"error": "An internal server error occurred while processing the document."}), 500
+
 
 
 @app.route('/download/<filename>', methods=['GET'])

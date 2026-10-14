@@ -81,3 +81,47 @@ def test_convert_multi_page_pdf_success(mock_get_engine, client, tmp_path):
     assert data["docx_file"].startswith("contracts_multi_page_")
     assert data["docx_file"].endswith(".docx")
     assert data["download_url"].startswith("/download/")
+
+
+def test_unified_engine_real_multipage_pdf(tmp_path):
+    """Integration test: generates a real 2-page PDF, iterates through engine rasterization,
+    and checks DocxBuilder.build_from_pages creates a valid DOCX with 2 sections.
+    """
+    import fitz
+    from pipeline.unified_engine import UnifiedDocumentEngine
+    from docx import Document
+
+    # Create real 2-page PDF with PyMuPDF
+    doc = fitz.open()
+    page1 = doc.new_page(width=595, height=842)
+    page1.insert_text((50, 100), "Trang 1: Cong hoa Xa hoi Chu nghia Viet Nam", fontsize=14)
+    page2 = doc.new_page(width=595, height=842)
+    page2.insert_text((50, 100), "Trang 2: Bang ke danh muc hang hoa", fontsize=14)
+
+    pdf_bytes = doc.tobytes()
+    doc.close()
+
+    engine = UnifiedDocumentEngine(artifacts_dir=str(tmp_path / "artifacts"))
+    
+    # Verify generator yields exactly 2 pages with correct image shapes
+    streamed_pages = list(engine.iter_pdf_pages(pdf_bytes, dpi=72))
+    assert len(streamed_pages) == 2
+    for p_idx, img in streamed_pages:
+        assert isinstance(img, np.ndarray)
+        assert img.ndim == 3
+        assert img.shape[2] == 3  # BGR
+
+    # Test docx builder from multi-page layouts
+    out_docx = tmp_path / "test_multipage_out.docx"
+    layouts = [
+        PageLayout(page_index=0, width=595, height=842, elements=[]),
+        PageLayout(page_index=1, width=595, height=842, elements=[]),
+    ]
+    engine.docx_builder.build_from_pages(layouts, output_path=out_docx)
+    assert out_docx.exists()
+    assert out_docx.stat().st_size > 0
+
+    # Verify Word document contains 2 sections (1 section per page)
+    word_doc = Document(str(out_docx))
+    assert len(word_doc.sections) == 2
+
