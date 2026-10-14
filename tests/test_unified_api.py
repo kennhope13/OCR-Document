@@ -104,10 +104,9 @@ def test_pipeline_integration_real_pdf_to_docx(tmp_path):
     pdf_bytes = doc.tobytes()
     doc.close()
 
-    engine = UnifiedDocumentEngine(artifacts_dir=str(tmp_path / "artifacts"))
-    out_docx_path = tmp_path / "integrated_output.docx"
+    # 2. Mock reconstructor with simulated process_page to avoid initializing PaddleOCR
+    mock_reconstructor = MagicMock()
 
-    # 2. Simulate reconstructor.process_page returning real document elements
     def mock_process_page(img_bgr, page_index=0, dpi=150):
         if page_index == 0:
             elem = LayoutElement(
@@ -140,15 +139,22 @@ def test_pipeline_integration_real_pdf_to_docx(tmp_path):
             )
             return PageLayout(page_index=1, width=595, height=842, elements=[elem])
 
+    mock_reconstructor.process_page.side_effect = mock_process_page
 
+    # Inject mock_reconstructor directly - zero heavy OCR initialization
+    engine = UnifiedDocumentEngine(
+        artifacts_dir=str(tmp_path / "artifacts"),
+        reconstructor=mock_reconstructor,
+    )
+    out_docx_path = tmp_path / "integrated_output.docx"
 
-    with patch.object(engine.reconstructor, "process_page", side_effect=mock_process_page):
-        saved_docx, layouts = engine.process_file_bytes(
-            file_bytes=pdf_bytes,
-            file_kind="pdf",
-            output_docx_path=out_docx_path,
-            dpi=72,
-        )
+    saved_docx, layouts = engine.process_file_bytes(
+        file_bytes=pdf_bytes,
+        file_kind="pdf",
+        output_docx_path=out_docx_path,
+        dpi=72,
+    )
+
 
     # 3. Verify execution and file generation
     assert saved_docx.exists()

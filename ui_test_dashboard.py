@@ -190,35 +190,13 @@ if start_process:
     status_text = st.empty()
 
     start_time = time.time()
-    images_to_process: List[np.ndarray] = []
+    file_kind = "pdf" if file_type == "pdf" else "image"
 
-    # 1. Chuyển đổi Input thành danh sách ảnh numpy BGR
-    status_text.text("Đang nạp và trích xuất hình ảnh từ tệp đầu vào...")
-    progress_bar.progress(10)
-
-    if file_type == "pdf":
-        doc = fitz.open(stream=file_bytes, filetype="pdf")
-        for p_i in range(len(doc)):
-            pix = doc[p_i].get_pixmap(dpi=selected_dpi)
-            arr = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, pix.n)
-            if pix.n >= 3:
-                bgr = cv2.cvtColor(arr, cv2.COLOR_RGB2BGR)
-            else:
-                bgr = cv2.cvtColor(arr, cv2.COLOR_GRAY2BGR)
-            images_to_process.append(bgr)
-    else:
-        nparr = np.frombuffer(file_bytes, np.uint8)
-        img_cv = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        if selected_dpi == 300 and (img_cv.shape[0] < 2000 and img_cv.shape[1] < 2000):
-            img_cv = cv2.resize(img_cv, (0, 0), fx=2.0, fy=2.0, interpolation=cv2.INTER_CUBIC)
-        images_to_process.append(img_cv)
-
-    progress_bar.progress(25)
-
-    # 1.1 Nhận diện ngôn ngữ tự động nếu chọn Auto-Detect
+    # 1. Nhận diện ngôn ngữ tự động (chỉ load/rasterize trang đầu tiên một cách an toàn)
+    progress_bar.progress(15)
     if "Auto Detect" in lang_choice:
         status_text.text("Đang nhận diện ngôn ngữ tài liệu (Tiếng Việt hay Tiếng Anh)...")
-        detected_lang, conf, details = engine_vi.lang_detector.detect_image_language(images_to_process[0])
+        detected_lang, conf, details = engine_vi.detect_file_language(file_bytes, file_kind=file_kind, dpi=selected_dpi)
         effective_lang = detected_lang
         st.info(f"🌐 **Ngôn ngữ nhận diện được:** `{'Tiếng Việt (vi)' if effective_lang == 'vi' else 'Tiếng Anh (en)'}` (Độ tin cậy: {conf*100:.1f}%)")
     elif "Tiếng Việt" in lang_choice:
@@ -228,8 +206,9 @@ if start_process:
 
     active_engine = engine_vi if effective_lang == "vi" else engine_en
 
-    progress_bar.progress(35)
-    status_text.text(f"Đã chuẩn bị {len(images_to_process)} trang ảnh. Bắt đầu phân tích layout và OCR ({effective_lang.upper()})...")
+    progress_bar.progress(30)
+    status_text.text(f"Bắt đầu phân tích layout và OCR ({effective_lang.upper()}) theo cơ chế streaming...")
+
 
     # 2. Xử lý từng trang qua UnifiedDocumentEngine
     def red_filter_transform(p_idx: int, img_bgr: np.ndarray) -> np.ndarray:

@@ -48,6 +48,9 @@ class UnifiedDocumentEngine:
         artifacts_dir: str = "artifacts/reconstruct",
         max_pdf_pages: int = DEFAULT_MAX_PDF_PAGES,
         max_image_pixels: int = DEFAULT_MAX_IMAGE_PIXELS,
+        reconstructor: Optional[DocumentReconstructor] = None,
+        docx_builder: Optional[DocxBuilder] = None,
+        lang_detector: Optional[FastLanguageDetector] = None,
     ):
         self.lang = lang
         self.artifacts_dir = Path(artifacts_dir)
@@ -58,10 +61,10 @@ class UnifiedDocumentEngine:
         # Thread safety lock for underlying inference calls (e.g. PaddleOCR)
         self._inference_lock = threading.Lock()
 
-        # Lazy-loaded / persistent pipeline components
-        self._reconstructor: Optional[DocumentReconstructor] = None
-        self._docx_builder: Optional[DocxBuilder] = None
-        self._lang_detector: Optional[FastLanguageDetector] = None
+        # Injected or lazy-loaded components
+        self._reconstructor = reconstructor
+        self._docx_builder = docx_builder
+        self._lang_detector = lang_detector
 
     @property
     def reconstructor(self) -> DocumentReconstructor:
@@ -83,6 +86,26 @@ class UnifiedDocumentEngine:
         if self._lang_detector is None:
             self._lang_detector = FastLanguageDetector()
         return self._lang_detector
+
+    def get_first_page_image(self, file_bytes: bytes, file_kind: str, dpi: int = 150) -> np.ndarray:
+        """Extract only the first page as a BGR numpy array without rasterizing the whole document."""
+        if file_kind == "pdf":
+            for _, img_bgr in self.iter_pdf_pages(file_bytes, dpi=dpi):
+                return img_bgr
+            raise SecurityValidationError("PDF has no pages.")
+        elif file_kind == "image":
+            return self.decode_image_bytes(file_bytes)
+        else:
+            raise SecurityValidationError(f"Unsupported file kind: {file_kind}")
+
+    def detect_file_language(self, file_bytes: bytes, file_kind: str, dpi: int = 150) -> Tuple[str, float, dict]:
+        """Detect language safely under inference lock using only the first page."""
+        first_page = self.get_first_page_image(file_bytes, file_kind=file_kind, dpi=dpi)
+        with self._inference_lock:
+            res = self.lang_detector.detect_image_language(first_page)
+        del first_page
+        return res
+
 
     def iter_pdf_pages(self, pdf_bytes: bytes, dpi: int = 150):
         """Iteratively yield BGR numpy image arrays from PDF bytes.
