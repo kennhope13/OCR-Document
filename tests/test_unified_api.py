@@ -176,3 +176,53 @@ def test_pipeline_integration_real_pdf_to_docx(tmp_path):
     assert "Camera HIKVISION" in cell_texts
 
 
+def test_dashboard_first_page_cached_flow(tmp_path):
+    """Verifies that language detection with return_first_page=True passes
+    cached_first_page into process_to_layouts without re-rasterizing page 0.
+    """
+    import fitz
+    from unittest.mock import MagicMock
+    from pipeline.unified_engine import UnifiedDocumentEngine
+
+    doc = fitz.open()
+    p1 = doc.new_page(width=595, height=842)
+    p1.insert_text((50, 100), "Trang 1 text", fontsize=14)
+    p2 = doc.new_page(width=595, height=842)
+    p2.insert_text((50, 100), "Trang 2 text", fontsize=14)
+    pdf_bytes = doc.tobytes()
+    doc.close()
+
+    mock_reconstructor = MagicMock()
+    mock_reconstructor.process_page.return_value = PageLayout(page_index=0, width=595, height=842, elements=[])
+
+    mock_lang_detector = MagicMock()
+    mock_lang_detector.detect_image_language.return_value = ("vi", 0.99, {})
+
+    engine = UnifiedDocumentEngine(
+        artifacts_dir=str(tmp_path / "artifacts"),
+        reconstructor=mock_reconstructor,
+        lang_detector=mock_lang_detector,
+    )
+
+    # 1. Detect language and get cached first page
+    lang, conf, details, first_page = engine.detect_file_language(
+        pdf_bytes, file_kind="pdf", dpi=72, return_first_page=True
+    )
+    assert lang == "vi"
+    assert isinstance(first_page, np.ndarray)
+
+    # 2. Process to layouts passing cached first page
+    layouts = engine.process_to_layouts(
+        file_bytes=pdf_bytes,
+        file_kind="pdf",
+        dpi=72,
+        cached_first_page=first_page,
+    )
+    assert len(layouts) == 2
+    assert mock_reconstructor.process_page.call_count == 2
+    # Verify the first page passed to process_page was exactly our cached array
+    passed_first_img = mock_reconstructor.process_page.call_args_list[0][0][0]
+    assert np.array_equal(passed_first_img, first_page)
+
+
+

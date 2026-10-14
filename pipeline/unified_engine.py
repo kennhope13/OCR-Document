@@ -98,14 +98,25 @@ class UnifiedDocumentEngine:
         else:
             raise SecurityValidationError(f"Unsupported file kind: {file_kind}")
 
-    def detect_file_language(self, file_bytes: bytes, file_kind: str, dpi: int = 150) -> Tuple[str, float, dict]:
-        """Detect language safely under inference lock using only the first page."""
+    def detect_file_language(
+        self,
+        file_bytes: bytes,
+        file_kind: str,
+        dpi: int = 150,
+        return_first_page: bool = False,
+    ) -> Union[Tuple[str, float, dict], Tuple[str, float, dict, np.ndarray]]:
+        """Detect language safely under inference lock using only the first page.
+        
+        If return_first_page=True, returns (lang, conf, details, first_page_img)
+        so caller can reuse the first page image without rasterizing it again.
+        """
         first_page = self.get_first_page_image(file_bytes, file_kind=file_kind, dpi=dpi)
         with self._inference_lock:
-            res = self.lang_detector.detect_image_language(first_page)
+            lang, conf, details = self.lang_detector.detect_image_language(first_page)
+        if return_first_page:
+            return lang, conf, details, first_page
         del first_page
-        return res
-
+        return lang, conf, details
 
     def iter_pdf_pages(self, pdf_bytes: bytes, dpi: int = 150):
         """Iteratively yield BGR numpy image arrays from PDF bytes.
@@ -177,11 +188,14 @@ class UnifiedDocumentEngine:
         dpi: int = 150,
         page_transform_fn: Optional[Callable[[int, np.ndarray], np.ndarray]] = None,
         progress_callback: Optional[Callable[[int, int], None]] = None,
+        cached_first_page: Optional[np.ndarray] = None,
     ) -> List[PageLayout]:
         """Process file bytes to a list of PageLayout objects.
         
         Shared across API and Streamlit Dashboard. Allows optional per-page image
         transformation (e.g. red seal filter) and progress tracking.
+        If cached_first_page is provided, page 0 uses this image directly rather than
+        re-rasterizing or re-decoding.
         """
         page_layouts: List[PageLayout] = []
 
@@ -197,7 +211,11 @@ class UnifiedDocumentEngine:
                 pass
 
             for page_idx, img_bgr in self.iter_pdf_pages(file_bytes, dpi=dpi):
-                work_img = img_bgr
+                if page_idx == 0 and cached_first_page is not None:
+                    work_img = cached_first_page
+                else:
+                    work_img = img_bgr
+
                 if page_transform_fn is not None:
                     work_img = page_transform_fn(page_idx, work_img)
 
@@ -208,7 +226,10 @@ class UnifiedDocumentEngine:
                     progress_callback(page_idx + 1, total_pages)
                 del img_bgr
         elif file_kind == "image":
-            img_bgr = self.decode_image_bytes(file_bytes)
+            if cached_first_page is not None:
+                img_bgr = cached_first_page
+            else:
+                img_bgr = self.decode_image_bytes(file_bytes)
             work_img = img_bgr
             if page_transform_fn is not None:
                 work_img = page_transform_fn(0, work_img)
@@ -231,6 +252,7 @@ class UnifiedDocumentEngine:
         output_docx_path: Union[str, Path],
         dpi: int = 150,
         page_transform_fn: Optional[Callable[[int, np.ndarray], np.ndarray]] = None,
+        cached_first_page: Optional[np.ndarray] = None,
     ) -> Tuple[Path, List[PageLayout]]:
         """Process image or PDF bytes through reconstruction and build a multi-page DOCX.
         
@@ -246,10 +268,12 @@ class UnifiedDocumentEngine:
             file_kind=file_kind,
             dpi=dpi,
             page_transform_fn=page_transform_fn,
+            cached_first_page=cached_first_page,
         )
 
         # Build and save single unified document using DocxBuilder.build_from_pages
         saved_path = self.docx_builder.build_from_pages(page_layouts, output_path=output_path)
         return Path(saved_path), page_layouts
+
 
 

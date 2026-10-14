@@ -194,9 +194,13 @@ if start_process:
 
     # 1. Nhận diện ngôn ngữ tự động (chỉ load/rasterize trang đầu tiên một cách an toàn)
     progress_bar.progress(15)
+    first_page_cached: Optional[np.ndarray] = None
+
     if "Auto Detect" in lang_choice:
         status_text.text("Đang nhận diện ngôn ngữ tài liệu (Tiếng Việt hay Tiếng Anh)...")
-        detected_lang, conf, details = engine_vi.detect_file_language(file_bytes, file_kind=file_kind, dpi=selected_dpi)
+        detected_lang, conf, details, first_page_cached = engine_vi.detect_file_language(
+            file_bytes, file_kind=file_kind, dpi=selected_dpi, return_first_page=True
+        )
         effective_lang = detected_lang
         st.info(f"🌐 **Ngôn ngữ nhận diện được:** `{'Tiếng Việt (vi)' if effective_lang == 'vi' else 'Tiếng Anh (en)'}` (Độ tin cậy: {conf*100:.1f}%)")
     elif "Tiếng Việt" in lang_choice:
@@ -209,13 +213,19 @@ if start_process:
     progress_bar.progress(30)
     status_text.text(f"Bắt đầu phân tích layout và OCR ({effective_lang.upper()}) theo cơ chế streaming...")
 
-
     # 2. Xử lý từng trang qua UnifiedDocumentEngine
-    def red_filter_transform(p_idx: int, img_bgr: np.ndarray) -> np.ndarray:
+    def page_transform(p_idx: int, img_bgr: np.ndarray) -> np.ndarray:
+        work_img = img_bgr
+        # Áp dụng phóng đại 2x nếu là ảnh đầu vào nhỏ (<2000px) ở chế độ 300 DPI
+        if file_kind == "image" and selected_dpi == 300 and (work_img.shape[0] < 2000 and work_img.shape[1] < 2000):
+            work_img = cv2.resize(work_img, (0, 0), fx=2.0, fy=2.0, interpolation=cv2.INTER_CUBIC)
+
+        # Khử màu con dấu đỏ nếu bật (chỉ với trang đầu tài liệu tiếng Anh)
         if apply_red_filter and p_idx == 0 and effective_lang == "en":
-            b, g, r = cv2.split(img_bgr)
-            return cv2.cvtColor(r, cv2.COLOR_GRAY2BGR)
-        return img_bgr
+            b, g, r = cv2.split(work_img)
+            work_img = cv2.cvtColor(r, cv2.COLOR_GRAY2BGR)
+
+        return work_img
 
     # Thu thập layout trang thông qua engine
     extracted_items_for_audit: List[Dict[str, Any]] = []
@@ -226,11 +236,13 @@ if start_process:
 
     all_pages = active_engine.process_to_layouts(
         file_bytes=file_bytes,
-        file_kind="pdf" if file_type == "pdf" else "image",
+        file_kind=file_kind,
         dpi=selected_dpi,
-        page_transform_fn=red_filter_transform,
+        page_transform_fn=page_transform,
         progress_callback=on_page_done,
+        cached_first_page=first_page_cached,
     )
+
 
     # Thu thập các dòng hàng hóa cho bảng kiểm toán / Excel / JSON từ all_pages
     for layout in all_pages:
@@ -379,11 +391,12 @@ if start_process:
         st.markdown(f"""
         <div class="result-box">
             <b>Tệp nguồn:</b> {input_filename}<br>
-            <b>Số trang đã xử lý:</b> {len(images_to_process)} trang<br>
+            <b>Số trang đã xử lý:</b> {len(all_pages)} trang<br>
             <b>Số dòng hàng hóa bóc tách:</b> {len(extracted_items_for_audit)} dòng<br>
             <b>Thời gian xử lý:</b> {elapsed_time:.2f}s<br>
             <b>Định dạng xuất:</b> .{download_ext.upper()}
         </div>
+
         """, unsafe_allow_html=True)
 
         if output_bytes:
