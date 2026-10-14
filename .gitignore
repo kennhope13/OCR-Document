@@ -20,9 +20,10 @@ temp/
 *.png
 *.jpg
 *.jpeg
+data/
+docs/images/
 !tests/fixtures/*.png
 !tests/fixtures/*.json
-!docs/images/*.png
 
 # Configuration and secrets
 configs/

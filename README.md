@@ -70,19 +70,10 @@ flowchart LR
     K --> L["Dựng File Word Hoàn Chỉnh (.docx)"]
 ```
 
----
-
-## 🖼️ 3. Mẫu Tài Liệu Thử Nghiệm (Sample Inspection)
-
-Hệ thống được thiết kế đặc thù để xử lý các tài liệu thực tế có bảng phức tạp, con dấu và trang bị quét xoay ngang:
-
-| Trang 1: Biên Bản Nghiệm Thu (Portrait, có Dấu Đỏ & Bảng) | Trang 2: Phụ Lục Thiết Bị (Landscape 90°, Bảng Cột) |
-| :---: | :---: |
-| ![Trang 1](docs/images/sample_page_1.png) | ![Trang 2](docs/images/sample_page_2.png) |
 
 ---
 
-## 🛠️ 4. Các Tính Năng Kỹ Thuật Nổi Bật
+## 🛠️ 3. Các Tính Năng Kỹ Thuật Nổi Bật
 
 1. **Xử Lý PDF Tuần Tự (Streaming Memory Efficiency)**:
    - Thay vì nạp toàn bộ các trang PDF vào mảng RAM (dễ gây lỗi OOM trên file lớn), `UnifiedDocumentEngine.iter_pdf_pages()` rasterize và giải phóng bộ nhớ từng trang theo cơ chế generator.
@@ -99,7 +90,7 @@ Hệ thống được thiết kế đặc thù để xử lý các tài liệu t
 
 ---
 
-## 🚀 5. Hướng Dẫn Cài Đặt & Sử Dụng
+### 🚀 4. Hướng Dẫn Cài Đặt & Sử Dụng
 
 ### Yêu Cầu Môi Trường
 - Python 3.10 hoặc 3.11 (khuyên dùng Python 3.11 64-bit trên Windows/Linux).
@@ -134,7 +125,7 @@ Dịch vụ chạy tại `http://localhost:5000`:
 
 ---
 
-## 🧪 6. Kiểm Thử & Đánh Giá Thực Nghiệm (Testing & Evaluation)
+## 🧪 5. Kiểm Thử Hệ Thống (Testing)
 
 ### Chạy Unit Test Suite
 Chạy toàn bộ bài kiểm thử tự động của API và `UnifiedDocumentEngine` (kiểm tra upload limits, HMAC tokens, path traversal, bounds validation):
@@ -142,17 +133,9 @@ Chạy toàn bộ bài kiểm thử tự động của API và `UnifiedDocumentE
 pytest tests/test_unified_api.py -v
 ```
 
-### Chạy Benchmark Trên Tập Holdout
-Đo lường trực tiếp `UnifiedDocumentEngine` trên tài liệu holdout thực tế (`BBNT lần 2.pdf`, 2 trang) với kịch bản A/B so sánh hiệu quả của `enable_deskew`:
-```bash
-python tests/evaluation/benchmark_holdout.py
-```
-Báo cáo kết quả chi tiết được tự động ghi nhận tại:
-`data/artifacts/benchmark_runs/holdout_baseline_report.json`.
-
 ---
 
-## 📂 7. Cấu Trúc Thư Mục Dự Án (Project Structure)
+## 📂 6. Cấu Trúc Thư Mục Dự Án (Project Structure)
 
 ```text
 be-ocr-core/
@@ -166,15 +149,8 @@ be-ocr-core/
 │   ├── deskew.py                         # Auto-orient 90°/270° & Hough Deskewer
 │   ├── docx_builder.py                   # Bộ dựng file Word đa trang theo tỷ lệ hình học
 │   └── language_detector.py              # Bộ phát hiện ngôn ngữ nhanh
-├── data/
-│   ├── ie_dataset_v2/
-│   │   ├── raw/                          # Tài liệu PDF thật & synthetic
-│   │   └── annotations/                  # Ground truth (BBNT_lan_2.json, DS-K1107AM.json)
-│   └── artifacts/benchmark_runs/         # Báo cáo kết quả benchmark lưu trữ
-├── docs/images/                          # Ảnh minh họa mẫu tài liệu cho tài liệu dự án
 └── tests/
     ├── test_unified_api.py               # Unit test suite chính của API & Engine
     ├── pipeline/                         # Test các module con (deskew, builder, table)
-    └── evaluation/
-        └── benchmark_holdout.py          # Script benchmark đo CER/WER và Table Alignment
-```
+    └── evaluation/                       # Khung đo lường & benchmark pipeline
+```
