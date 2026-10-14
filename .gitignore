@@ -22,10 +22,7 @@ temp/
 *.jpeg
 !tests/fixtures/*.png
 !tests/fixtures/*.json
-!brand_region.png
-!page1.png
-!page2.png
-!page3.png
+!docs/images/*.png
 
 # Configuration and secrets
 configs/
