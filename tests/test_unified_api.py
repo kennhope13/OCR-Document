@@ -38,16 +38,47 @@ def test_convert_rejects_unsupported_format(client):
     assert "Unsupported file format" in res.get_json()["error"]
 
 
-def test_download_prevents_path_traversal(client):
-    # Attempt directory traversal attacks
+def test_download_security_hmac_and_path_traversal(client, tmp_path):
+    import time
+    from app import LOCAL_OUTPUT_DIR, generate_download_token
+
+    # 1. Attempt directory traversal attacks (must be rejected)
     res1 = client.get("/download/../../app.py")
-    assert res1.status_code in {400, 404}
+    assert res1.status_code in {400, 403, 404}
 
     res2 = client.get("/download/..%2F..%2Fetc%2Fpasswd")
-    assert res2.status_code in {400, 404}
+    assert res2.status_code in {400, 403, 404}
 
-    res3 = client.get("/download/non_existent_document.docx")
-    assert res3.status_code == 404
+    # 2. Attempt download without token or with missing parameters (403 Forbidden)
+    res3 = client.get("/download/some_document.docx")
+    assert res3.status_code == 403
+    assert "Invalid or missing token expiration" in res3.get_json()["error"]
+
+    # 3. Attempt download with invalid signature (403 Forbidden)
+    res4 = client.get(f"/download/some_document.docx?token=forged_token&expires={int(time.time()) + 1000}")
+    assert res4.status_code == 403
+    assert "Unauthorized or expired download link" in res4.get_json()["error"]
+
+    # 4. Attempt download with expired token (403 Forbidden)
+    expired_time = int(time.time()) - 10
+    expired_token = generate_download_token("some_document.docx", expired_time)
+    res5 = client.get(f"/download/some_document.docx?token={expired_token}&expires={expired_time}")
+    assert res5.status_code == 403
+
+    # 5. Download with valid token for existing file
+    test_file = LOCAL_OUTPUT_DIR / "secure_doc.docx"
+    test_file.write_bytes(b"PK\x03\x04valid-docx")
+    valid_time = int(time.time()) + 1000
+    valid_token = generate_download_token("secure_doc.docx", valid_time)
+
+    try:
+        res6 = client.get(f"/download/secure_doc.docx?token={valid_token}&expires={valid_time}")
+        assert res6.status_code == 200
+        assert res6.data == b"PK\x03\x04valid-docx"
+        res6.close()
+    finally:
+        test_file.unlink(missing_ok=True)
+
 
 
 @patch("app.get_engine")

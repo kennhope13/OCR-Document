@@ -23,10 +23,34 @@ BASE_DIR = Path(__file__).resolve().parent
 LOCAL_OUTPUT_DIR = BASE_DIR / "output" / "image_to_word"
 LOCAL_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
+import hmac
+import hashlib
+import time
+
 # Retention / TTL Configuration for local outputs (in seconds, default 2 hours)
 OUTPUT_RETENTION_SECONDS = int(os.getenv("OUTPUT_RETENTION_SECONDS", 7200))
 
+# HMAC Secret & Token Expiration for Download URLs (default token validity: 1800s / 30 mins)
+DOWNLOAD_SECRET_KEY = os.getenv("DOWNLOAD_SECRET_KEY", "ocr-secret-download-key-default").encode("utf-8")
+DOWNLOAD_TOKEN_TTL_SECONDS = int(os.getenv("DOWNLOAD_TOKEN_TTL_SECONDS", 1800))
+
+
+def generate_download_token(filename: str, expires_at: int) -> str:
+    """Generate secure HMAC-SHA256 signature for filename and expiration timestamp."""
+    payload = f"{filename}:{expires_at}".encode("utf-8")
+    return hmac.new(DOWNLOAD_SECRET_KEY, payload, hashlib.sha256).hexdigest()
+
+
+def verify_download_token(filename: str, expires_at: int, token: str) -> bool:
+    """Verify HMAC signature with constant-time comparison and check expiration timestamp."""
+    if not token or time.time() > expires_at:
+        return False
+    expected = generate_download_token(filename, expires_at)
+    return hmac.compare_digest(expected, token)
+
+
 import threading
+
 
 # Shared Unified Engine instance with thread-safe singleton lock
 _engine: Optional[UnifiedDocumentEngine] = None
@@ -136,11 +160,17 @@ def convert_ocr():
         except Exception as gcs_err:
             logger.warning(f"GCS upload skipped or failed: {gcs_err}")
 
+        # Generate time-limited signed download URL
+        expires_at = int(time.time()) + DOWNLOAD_TOKEN_TTL_SECONDS
+        download_token = generate_download_token(unique_file_id, expires_at)
+        download_url = f"/download/{unique_file_id}?token={download_token}&expires={expires_at}"
+
         return jsonify({
             "message": "OCR process completed successfully",
             "docx_file": unique_file_id,
             "total_pages": len(page_layouts),
-            "download_url": f"/download/{unique_file_id}"
+            "download_url": download_url,
+            "expires_at": expires_at,
         }), 200
 
     except SecurityValidationError as sve:
@@ -156,10 +186,21 @@ def convert_ocr():
 
 @app.route('/download/<filename>', methods=['GET'])
 def download_file(filename):
-    """Safely send file from strictly restricted output directory to prevent path traversal."""
+    """Safely send file with mandatory HMAC signature & expiration verification."""
     safe_name = secure_filename(filename)
     if not safe_name or not safe_name.endswith('.docx'):
         return jsonify({"error": "Invalid file requested."}), 400
+
+    # Verify HMAC token and expiration
+    token = request.args.get('token', '')
+    raw_expires = request.args.get('expires', '')
+    try:
+        expires_at = int(raw_expires)
+    except (ValueError, TypeError):
+        return jsonify({"error": "Invalid or missing token expiration."}), 403
+
+    if not verify_download_token(safe_name, expires_at, token):
+        return jsonify({"error": "Unauthorized or expired download link."}), 403
 
     local_file_path = LOCAL_OUTPUT_DIR / safe_name
     if local_file_path.is_file():
@@ -179,6 +220,7 @@ def download_file(filename):
         blob = bucket.blob(blob_path)
         if not blob.exists():
             return jsonify({"error": "File not found"}), 404
+
 
         file_bytes = blob.download_as_bytes()
         return send_file(
